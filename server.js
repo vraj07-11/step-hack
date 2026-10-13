@@ -690,10 +690,17 @@ app.post('/api/sync', async (req, res) => {
   }
 });
 
-// 8. Session-private history route
+// 8. Session-private history routes
 app.get('/api/history', (req, res) => {
   const history = req.session?.history || [];
   res.json({ history });
+});
+
+app.post('/api/history/clear', (req, res) => {
+  if (req.session) {
+    req.session.history = [];
+  }
+  res.json({ success: true });
 });
 
 // 9. QR Code route

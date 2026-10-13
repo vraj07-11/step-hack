@@ -177,6 +177,46 @@ function bindEvents() {
     });
   }
 
+  const btnProfileToggle = document.getElementById('btn-profile-toggle');
+  const profileDropdown = document.getElementById('profile-dropdown');
+  const btnClearHistory = document.getElementById('btn-clear-history');
+
+  if (btnProfileToggle && profileDropdown) {
+    btnProfileToggle.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const isHidden = profileDropdown.classList.contains('hidden');
+      profileDropdown.classList.toggle('hidden', !isHidden);
+      btnProfileToggle.setAttribute('aria-expanded', isHidden ? 'true' : 'false');
+    });
+
+    document.addEventListener('click', (e) => {
+      if (!profileDropdown.contains(e.target) && !btnProfileToggle.contains(e.target)) {
+        profileDropdown.classList.add('hidden');
+        btnProfileToggle.setAttribute('aria-expanded', 'false');
+      }
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        profileDropdown.classList.add('hidden');
+        btnProfileToggle.setAttribute('aria-expanded', 'false');
+      }
+    });
+  }
+
+  if (btnClearHistory) {
+    btnClearHistory.addEventListener('click', async () => {
+      if (!confirm('Clear recent session history?')) return;
+      try {
+        await fetch('/api/history/clear', { method: 'POST' });
+        showToast('History cleared.');
+        loadHistory();
+      } catch (err) {
+        showToast('Failed to clear history.', 'error');
+      }
+    });
+  }
+
   if (btnSync) btnSync.addEventListener('click', handleSyncSteps);
   if (btnRefreshFit) btnRefreshFit.addEventListener('click', () => { loadTodaySteps(); loadStatus(); });
   if (btnConnectGoogle) btnConnectGoogle.addEventListener('click', handleConnectGoogle);
@@ -391,27 +431,34 @@ async function loadStatus() {
     const data = await res.json();
 
     const unlinkedEl = document.getElementById('auth-unlinked');
-    const linkedEl = document.getElementById('auth-linked');
+    const profileBtn = document.getElementById('btn-profile-toggle');
     const connectBanner = document.getElementById('connect-banner');
     const todayCard = document.getElementById('today-counter-card');
 
     if (data.isConnected && data.user) {
       state.isConnected = true;
       if (unlinkedEl) unlinkedEl.classList.add('hidden');
-      if (linkedEl) linkedEl.classList.remove('hidden');
+      if (profileBtn) profileBtn.classList.remove('hidden');
       if (connectBanner) connectBanner.classList.add('hidden');
       if (todayCard) todayCard.classList.remove('hidden');
 
       const avatar = document.getElementById('user-avatar');
       const name = document.getElementById('user-name');
+      const menuAvatar = document.getElementById('profile-menu-avatar');
+      const menuName = document.getElementById('profile-menu-name');
+      const menuEmail = document.getElementById('profile-menu-email');
+
       if (avatar) avatar.src = data.user.picture || '';
       if (name) name.textContent = data.user.name || data.user.email || 'User';
+      if (menuAvatar) menuAvatar.src = data.user.picture || '';
+      if (menuName) menuName.textContent = data.user.name || 'User';
+      if (menuEmail) menuEmail.textContent = data.user.email || '';
 
       loadTodaySteps();
     } else {
       state.isConnected = false;
       if (unlinkedEl) unlinkedEl.classList.remove('hidden');
-      if (linkedEl) linkedEl.classList.add('hidden');
+      if (profileBtn) profileBtn.classList.add('hidden');
       if (connectBanner) connectBanner.classList.remove('hidden');
       if (todayCard) todayCard.classList.add('hidden');
     }
@@ -423,6 +470,7 @@ async function loadStatus() {
 async function loadTodaySteps() {
   if (!state.isConnected) return;
   const stepValEl = document.getElementById('today-steps-val');
+  const profToday = document.getElementById('prof-today-steps');
   if (stepValEl) stepValEl.textContent = '...';
 
   try {
@@ -430,6 +478,7 @@ async function loadTodaySteps() {
     if (res.ok) {
       const data = await res.json();
       if (stepValEl) stepValEl.textContent = formatNum(data.todaySteps);
+      if (profToday) profToday.textContent = formatNum(data.todaySteps);
       state.todaySteps = data.todaySteps;
     }
   } catch (err) {
@@ -468,7 +517,8 @@ async function loadHistory() {
   try {
     const res = await fetch('/api/history');
     const data = await res.json();
-    const history = data.history || [];
+    const profCount = document.getElementById('prof-sessions-count');
+    if (profCount) profCount.textContent = history.length;
 
     if (history.length === 0) {
       listEl.innerHTML = '<div class="empty-state">No sessions logged in this session yet.</div>';

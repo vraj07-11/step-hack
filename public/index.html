@@ -61,10 +61,52 @@
           <span class="status-indicator"></span>
           <span>Not connected</span>
         </div>
-        <div id="auth-linked" class="auth-user hidden">
-          <img id="user-avatar" class="avatar" src="" alt="User avatar">
-          <span id="user-name" class="user-display">Account</span>
-          <button id="btn-disconnect" class="btn-text-danger" title="Sign out">Sign out</button>
+        <div class="profile-wrapper">
+          <button id="btn-profile-toggle" class="profile-pill hidden" aria-expanded="false" aria-label="Account menu" type="button">
+            <img id="user-avatar" class="avatar" src="" alt="Avatar">
+            <span id="user-name" class="user-display">Account</span>
+            <svg class="chevron-icon" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </button>
+          
+          <!-- User Profile Dropdown Popover -->
+          <div id="profile-dropdown" class="profile-dropdown hidden">
+            <div class="profile-card-header">
+              <img id="profile-menu-avatar" class="avatar-lg" src="" alt="Avatar">
+              <div class="profile-card-info">
+                <span id="profile-menu-name" class="profile-card-name">User</span>
+                <span id="profile-menu-email" class="profile-card-email">user@gmail.com</span>
+              </div>
+            </div>
+            
+            <div class="profile-stats-row">
+              <div class="profile-stat-item">
+                <span id="prof-today-steps" class="profile-stat-val">0</span>
+                <span class="profile-stat-lbl">Today's Fit Steps</span>
+              </div>
+              <div class="profile-stat-item">
+                <span id="prof-sessions-count" class="profile-stat-val">0</span>
+                <span class="profile-stat-lbl">Sessions Logged</span>
+              </div>
+            </div>
+
+            <div class="profile-menu-nav">
+              <a href="https://fit.google.com" target="_blank" rel="noopener" class="profile-menu-action">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"></path><polyline points="15 3 21 3 21 9"></polyline><line x1="10" y1="14" x2="21" y2="3"></line></svg>
+                <span>View Google Fit Activity</span>
+              </a>
+              <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener" class="profile-menu-action">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                <span>Google Permissions</span>
+              </a>
+            </div>
+
+            <div class="profile-menu-footer">
+              <button id="btn-disconnect" class="profile-menu-logout" type="button">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg>
+                <span>Log out</span>
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </header>
@@ -228,7 +270,10 @@
     <section class="panel-secondary">
       <div class="history-header">
         <span class="field-label">Recent Sessions</span>
-        <button id="btn-refresh-history" class="btn-subtle-link">Refresh</button>
+        <div class="history-actions">
+          <button id="btn-clear-history" class="btn-subtle-link text-danger" type="button">Clear</button>
+          <button id="btn-refresh-history" class="btn-subtle-link" type="button">Refresh</button>
+        </div>
       </div>
       <div id="history-list" class="history-entries">
         <div class="empty-state">No sessions logged in this session yet.</div>
