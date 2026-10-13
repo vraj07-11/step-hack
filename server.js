@@ -1,5 +1,9 @@
 const express = require('express');
 const { google } = require('googleapis');
+const cookieSession = require('cookie-session');
+const rateLimit = require('express-rate-limit');
+const helmet = require('helmet');
+const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
@@ -8,15 +12,83 @@ require('dotenv').config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const isProd = process.env.NODE_ENV === 'production' || !!process.env.RENDER;
 
-app.use(express.json());
+// Trust reverse proxies (Render, Cloudflare, etc.) for correct IP resolution in rate limiting
+app.set('trust proxy', 1);
+
+// 1. Security Headers (Helmet)
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ["'self'"],
+        scriptSrc: ["'self'", "'unsafe-inline'"],
+        styleSrc: ["'self'", "'unsafe-inline'", 'https://fonts.googleapis.com'],
+        fontSrc: ["'self'", 'https://fonts.gstatic.com'],
+        imgSrc: [
+          "'self'",
+          'data:',
+          'https://*.googleusercontent.com',
+          'https://lh3.googleusercontent.com'
+        ],
+        connectSrc: ["'self'"]
+      }
+    },
+    crossOriginEmbedderPolicy: false
+  })
+);
+
+// 2. Cookie Session for Multi-User Privacy & Stateless Scalability
+app.use(
+  cookieSession({
+    name: '__stephack_session',
+    keys: [process.env.SESSION_SECRET || 'stephack-secret-salt-2026-auth-prod'],
+    maxAge: 30 * 24 * 60 * 60 * 1000, // 30 days
+    httpOnly: true, // Prevents client-side script access
+    secure: isProd, // True on HTTPS production
+    sameSite: 'lax'
+  })
+);
+
+app.use(express.json({ limit: '50kb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
-const CONFIG_PATH = path.join(__dirname, 'config.json');
-const TOKENS_PATH = path.join(__dirname, 'tokens.json');
-const LOGS_PATH = path.join(__dirname, 'history.json');
+// 3. Rate Limiters
+// General API limiter: 120 requests per minute
+const generalLimiter = rateLimit({
+  windowMs: 1 * 60 * 1000,
+  max: 120,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many requests. Please wait a moment.' }
+});
 
-// Helper to read JSON file safely
+// Sync limiter: max 20 step syncs per 10 minutes per IP/session
+const syncLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Rate limit exceeded: maximum 20 syncs per 10 minutes to protect Google Fit quota.' }
+});
+
+// Auth URL limiter: max 15 attempts per 5 minutes
+const authLimiter = rateLimit({
+  windowMs: 5 * 60 * 1000,
+  max: 15,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many login attempts. Please wait 5 minutes.' }
+});
+
+app.use('/api/', generalLimiter);
+app.use('/api/sync', syncLimiter);
+app.use('/api/auth/', authLimiter);
+
+const CONFIG_PATH = path.join(__dirname, 'config.json');
+
+// Helper to read JSON safely
 function loadJson(filePath, defaultVal = {}) {
   try {
     if (fs.existsSync(filePath)) {
@@ -28,18 +100,13 @@ function loadJson(filePath, defaultVal = {}) {
   return defaultVal;
 }
 
-// Helper to save JSON file
-function saveJson(filePath, data) {
-  fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf8');
-}
-
-// Load config
+// Load server config
 function getConfig() {
   const fileConfig = loadJson(CONFIG_PATH, {});
   return {
-    clientId: process.env.GOOGLE_CLIENT_ID || fileConfig.clientId || '',
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET || fileConfig.clientSecret || '',
-    redirectUri: process.env.REDIRECT_URI || fileConfig.redirectUri || `http://localhost:${PORT}/auth/callback`
+    clientId: (process.env.GOOGLE_CLIENT_ID || fileConfig.clientId || '').trim(),
+    clientSecret: (process.env.GOOGLE_CLIENT_SECRET || fileConfig.clientSecret || '').trim(),
+    redirectUri: (process.env.REDIRECT_URI || fileConfig.redirectUri || `http://localhost:${PORT}/auth/callback`).trim()
   };
 }
 
@@ -55,35 +122,33 @@ const SCOPES = [
   'https://www.googleapis.com/auth/userinfo.email'
 ];
 
-// Helper to get OAuth2 client
-function getOAuthClient(customRedirect = null) {
+// Helper to get OAuth2 client for a specific user request
+function getOAuthClient(req = null) {
   const config = getConfig();
   if (!config.clientId || !config.clientSecret) {
     return null;
   }
-  const redirect = customRedirect || config.redirectUri;
+
   const oauth2Client = new google.auth.OAuth2(
     config.clientId,
     config.clientSecret,
-    redirect
+    config.redirectUri
   );
 
-  const tokens = loadJson(TOKENS_PATH, null);
-  if (tokens) {
-    oauth2Client.setCredentials(tokens);
-  }
+  // If user has a session with tokens, attach them
+  if (req && req.session && req.session.tokens) {
+    oauth2Client.setCredentials(req.session.tokens);
 
-  // Auto save refreshed tokens
-  oauth2Client.on('tokens', (newTokens) => {
-    const existing = loadJson(TOKENS_PATH, {});
-    const merged = { ...existing, ...newTokens };
-    saveJson(TOKENS_PATH, merged);
-  });
+    // Auto-update session when tokens refresh
+    oauth2Client.on('tokens', (newTokens) => {
+      req.session.tokens = { ...req.session.tokens, ...newTokens };
+    });
+  }
 
   return oauth2Client;
 }
 
-// Get local IPv4 address for phone access
+// Get local IPv4 address
 function getLocalIp() {
   const interfaces = os.networkInterfaces();
   for (const ifaceName of Object.keys(interfaces)) {
@@ -96,17 +161,69 @@ function getLocalIp() {
   return 'localhost';
 }
 
+// ---------------------- INPUT SANITIZATION ----------------------
+
+function validateWalkInput({ totalSteps, startTime, endTime, paceType, device }) {
+  const parsedSteps = parseInt(totalSteps, 10);
+  if (isNaN(parsedSteps) || parsedSteps < 10 || parsedSteps > 100000) {
+    throw new Error('Steps must be between 10 and 100,000 steps.');
+  }
+
+  const startMs = new Date(startTime).getTime();
+  const endMs = new Date(endTime).getTime();
+
+  if (isNaN(startMs) || isNaN(endMs)) {
+    throw new Error('Invalid start or end time format.');
+  }
+
+  const durationMs = endMs - startMs;
+  if (durationMs < 60000) {
+    throw new Error('Walk duration must be at least 1 minute.');
+  }
+
+  if (durationMs > 24 * 60 * 60 * 1000) {
+    throw new Error('Walk duration cannot exceed 24 hours in a single session.');
+  }
+
+  const now = Date.now();
+  // Allow up to 10 minutes in the future for clock skew
+  if (endMs > now + 10 * 60 * 1000) {
+    throw new Error('End time cannot be in the future.');
+  }
+
+  // Do not allow walks older than 35 days (Google Fit limit)
+  if (startMs < now - 35 * 24 * 60 * 60 * 1000) {
+    throw new Error('Start time cannot be older than 30 days.');
+  }
+
+  const validPaces = ['natural', 'brisk', 'jog'];
+  const sanitizedPace = validPaces.includes(paceType) ? paceType : 'natural';
+
+  const sanitizedDevice = {
+    manufacturer: String(device?.manufacturer || 'Google').replace(/[^a-zA-Z0-9 ]/g, '').slice(0, 30) || 'Google',
+    model: String(device?.model || 'Pixel 8 Pro').replace(/[^a-zA-Z0-9 ]/g, '').slice(0, 30) || 'Pixel 8 Pro'
+  };
+
+  return {
+    totalSteps: parsedSteps,
+    startMs,
+    endMs,
+    durationMs,
+    paceType: sanitizedPace,
+    device: sanitizedDevice
+  };
+}
+
 // ---------------------- API ROUTES ----------------------
 
-// 1. Get status: credentials loaded, connection status, user profile
+// 1. Status route: Returns user session info without leaking secrets
 app.get('/api/status', async (req, res) => {
   const config = getConfig();
-  const tokens = loadJson(TOKENS_PATH, null);
   const localIp = getLocalIp();
 
   const status = {
     hasCredentials: !!(config.clientId && config.clientSecret),
-    clientId: config.clientId ? `${config.clientId.slice(0, 15)}...` : '',
+    serverConfigured: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
     redirectUri: config.redirectUri,
     localIp,
     localUrl: `http://${localIp}:${PORT}`,
@@ -114,12 +231,12 @@ app.get('/api/status', async (req, res) => {
     user: null
   };
 
-  if (!status.hasCredentials || !tokens) {
+  if (!status.hasCredentials || !req.session || !req.session.tokens) {
     return res.json(status);
   }
 
   try {
-    const oauth2Client = getOAuthClient();
+    const oauth2Client = getOAuthClient(req);
     const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
     const userInfo = await oauth2.userinfo.get();
     status.isConnected = true;
@@ -129,108 +246,83 @@ app.get('/api/status', async (req, res) => {
       picture: userInfo.data.picture
     };
   } catch (error) {
-    console.error('Failed to get user info:', error.message);
+    // If token expired and refresh failed, clear session
+    req.session.tokens = null;
     status.isConnected = false;
-    status.error = error.message;
   }
 
   res.json(status);
 });
 
-// 2. Save Google Cloud credentials
-app.post('/api/config', (req, res) => {
-  const { clientId, clientSecret, redirectUri } = req.body;
-  if (!clientId || !clientSecret) {
-    return res.status(400).json({ error: 'Client ID and Client Secret are required.' });
-  }
-
-  const currentConfig = loadJson(CONFIG_PATH, {});
-  const newConfig = {
-    ...currentConfig,
-    clientId: clientId.trim(),
-    clientSecret: clientSecret.trim(),
-    redirectUri: redirectUri ? redirectUri.trim() : `http://localhost:${PORT}/auth/callback`
-  };
-  saveJson(CONFIG_PATH, newConfig);
-
-  res.json({ success: true, message: 'Credentials saved successfully!' });
-});
-
-// 3. Generate OAuth Auth URL
+// 2. Generate Auth URL with Cryptographic CSRF State
 app.get('/api/auth/url', (req, res) => {
-  const redirectUri = req.query.redirectUri || null;
-  const oauth2Client = getOAuthClient(redirectUri);
+  const oauth2Client = getOAuthClient(req);
   if (!oauth2Client) {
-    return res.status(400).json({ error: 'Please configure Google Client ID and Secret first.' });
+    return res.status(400).json({ error: 'OAuth credentials not configured on the server.' });
   }
+
+  // Generate secure random state token to prevent CSRF attacks
+  const stateToken = crypto.randomBytes(16).toString('hex');
+  req.session.oauthState = stateToken;
 
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
     prompt: 'consent',
-    scope: SCOPES
+    scope: SCOPES,
+    state: stateToken
   });
 
   res.json({ authUrl });
 });
 
-// 4. OAuth callback route
+// 3. OAuth Callback Handler with CSRF State Verification
 app.get('/auth/callback', async (req, res) => {
-  const { code, error } = req.query;
+  const { code, state, error } = req.query;
+
   if (error) {
-    return res.redirect(`/?auth_error=${encodeURIComponent(error)}`);
+    return res.redirect(`/?auth_error=${encodeURIComponent(String(error))}`);
   }
+
+  // Verify CSRF state token
+  if (!state || !req.session || state !== req.session.oauthState) {
+    return res.redirect('/?auth_error=Security+check+failed+(CSRF+State+Mismatch)');
+  }
+  // Clear state after single use
+  req.session.oauthState = null;
+
   if (!code) {
-    return res.redirect('/?auth_error=No+code+provided');
+    return res.redirect('/?auth_error=No+authorization+code+provided');
   }
 
   try {
-    const oauth2Client = getOAuthClient();
-    const { tokens } = await oauth2Client.getToken(code);
-    oauth2Client.setCredentials(tokens);
-    saveJson(TOKENS_PATH, tokens);
+    const oauth2Client = getOAuthClient(req);
+    const { tokens } = await oauth2Client.getToken(String(code));
+    
+    // Store tokens strictly in user's encrypted session cookie
+    req.session.tokens = tokens;
     res.redirect('/?connected=1');
   } catch (err) {
-    console.error('OAuth token exchange error:', err);
+    console.error('OAuth token exchange error:', err.message);
     res.redirect(`/?auth_error=${encodeURIComponent(err.message)}`);
   }
 });
 
-// 5. Manual token / code exchange endpoint (for convenience on mobile)
-app.post('/api/auth/token', async (req, res) => {
-  const { code, redirectUri } = req.body;
-  if (!code) {
-    return res.status(400).json({ error: 'Auth code is required' });
-  }
-
-  try {
-    const oauth2Client = getOAuthClient(redirectUri);
-    const { tokens } = await oauth2Client.getToken(code);
-    saveJson(TOKENS_PATH, tokens);
-    res.json({ success: true });
-  } catch (err) {
-    res.status(500).json({ error: err.message });
-  }
-});
-
-// 6. Disconnect / Logout
+// 4. Logout / Disconnect (clears session cookie)
 app.post('/api/auth/disconnect', (req, res) => {
-  if (fs.existsSync(TOKENS_PATH)) {
-    fs.unlinkSync(TOKENS_PATH);
-  }
-  res.json({ success: true, message: 'Disconnected from Google Fit.' });
+  req.session = null;
+  res.json({ success: true, message: 'Disconnected successfully.' });
 });
 
-// 7. Get today's total steps directly from Google Fit
+// 5. Today's steps for logged-in user
 app.get('/api/today-steps', async (req, res) => {
   try {
-    const oauth2Client = getOAuthClient();
-    if (!oauth2Client) {
+    const oauth2Client = getOAuthClient(req);
+    if (!oauth2Client || !req.session?.tokens) {
       return res.status(401).json({ error: 'Not authenticated' });
     }
 
     const fitness = google.fitness({ version: 'v1', auth: oauth2Client });
     
-    // Start and end of today in local time
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
     const endOfDay = now.getTime();
@@ -263,79 +355,48 @@ app.get('/api/today-steps', async (req, res) => {
 
     res.json({ todaySteps: totalSteps, date: now.toDateString() });
   } catch (err) {
-    console.error('Error fetching today steps:', err.message);
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to fetch today steps' });
   }
 });
 
 // ---------------- CADENCE & REALISTIC SENSOR GENERATOR ----------------
 
-/**
- * Generates realistic walking data points with natural cadence fluctuations.
- * Avoids constant robotic cadence; adds natural walking curves, micro-pauses,
- * and distributes total steps precisely across intervals.
- */
-function generateRealisticWalkData({
-  totalSteps,
-  startTime,
-  endTime,
-  paceType = 'natural', // natural, brisk, jog, custom
-  device = { manufacturer: 'Google', model: 'Pixel 8 Pro' }
-}) {
-  const startMs = new Date(startTime).getTime();
-  const endMs = new Date(endTime).getTime();
-  const durationMs = endMs - startMs;
+function generateRealisticWalkData(validated) {
+  const { totalSteps, startMs, endMs, durationMs, paceType, device } = validated;
   const durationMinutes = durationMs / 60000;
 
-  if (durationMinutes <= 0) {
-    throw new Error('End time must be after start time.');
-  }
-  if (totalSteps <= 0) {
-    throw new Error('Steps must be greater than 0.');
-  }
-
-  // Interval resolution: 30 seconds chunks for realistic sensor updates
   const intervalSeconds = 30;
   const totalIntervals = Math.max(1, Math.round((durationMs / 1000) / intervalSeconds));
   
-  // Base average steps per interval
-  const baseStepsPerInterval = totalSteps / totalIntervals;
-
-  // Generate realistic weights using smooth random walk + micro pauses
   const weights = [];
   let currentMomentum = 1.0;
 
   for (let i = 0; i < totalIntervals; i++) {
     const progress = i / totalIntervals;
 
-    // Warm-up factor: start slightly slower in the first 5%
+    // Warm-up factor
     let warmUpFactor = 1.0;
     if (progress < 0.05) {
       warmUpFactor = 0.7 + (progress / 0.05) * 0.3;
     }
-    // Cool-down factor: taper slightly in the last 5%
+    // Cool-down factor
     let coolDownFactor = 1.0;
     if (progress > 0.95) {
       coolDownFactor = 0.8 + (1 - (progress - 0.95) / 0.05) * 0.2;
     }
 
-    // Natural variation with momentum
-    const jitter = (Math.random() - 0.5) * 0.2; // +/- 10%
+    const jitter = (Math.random() - 0.5) * 0.2;
     currentMomentum = Math.max(0.7, Math.min(1.3, currentMomentum + jitter));
 
-    // Occasional simulated brief pause (like waiting at a pedestrian crosswalk ~3% chance)
     const isPause = totalIntervals > 10 && Math.random() < 0.03 && progress > 0.1 && progress < 0.9;
     const pauseFactor = isPause ? 0.15 : 1.0;
 
-    const intervalWeight = currentMomentum * warmUpFactor * coolDownFactor * pauseFactor;
-    weights.push(intervalWeight);
+    weights.push(currentMomentum * warmUpFactor * coolDownFactor * pauseFactor);
   }
 
-  // Normalize weights to strictly equal totalSteps
   const totalWeight = weights.reduce((a, b) => a + b, 0);
   const normalizedSteps = weights.map(w => Math.floor((w / totalWeight) * totalSteps));
 
-  // Distribute remainder so the sum exactly matches totalSteps
   let allocatedSteps = normalizedSteps.reduce((a, b) => a + b, 0);
   let remainder = totalSteps - allocatedSteps;
   let idx = 0;
@@ -345,9 +406,8 @@ function generateRealisticWalkData({
     idx++;
   }
 
-  // Stride length and calories based on pace
-  let strideMeters = 0.74; // standard adult walk
-  let calPerStep = 0.042; // standard walk calories
+  let strideMeters = 0.74;
+  let calPerStep = 0.042;
   if (paceType === 'brisk') {
     strideMeters = 0.78;
     calPerStep = 0.046;
@@ -366,7 +426,6 @@ function generateRealisticWalkData({
     const chunkStartMs = startMs + (i * intervalMs);
     const chunkEndMs = (i === totalIntervals - 1) ? endMs : startMs + ((i + 1) * intervalMs);
     
-    // Convert to BigInt nanoseconds strings
     const startNanos = (BigInt(chunkStartMs) * 1000000n).toString();
     const endNanos = (BigInt(chunkEndMs) * 1000000n).toString();
 
@@ -374,7 +433,6 @@ function generateRealisticWalkData({
     const distanceMeters = parseFloat((steps * strideMeters).toFixed(2));
     const calories = parseFloat((steps * calPerStep).toFixed(3));
 
-    // Step delta point
     stepPoints.push({
       startTimeNanos: startNanos,
       endTimeNanos: endNanos,
@@ -382,7 +440,6 @@ function generateRealisticWalkData({
       value: [{ intVal: steps }]
     });
 
-    // Distance delta point
     distancePoints.push({
       startTimeNanos: startNanos,
       endTimeNanos: endNanos,
@@ -390,7 +447,6 @@ function generateRealisticWalkData({
       value: [{ fpVal: distanceMeters }]
     });
 
-    // Calories point
     caloriePoints.push({
       startTimeNanos: startNanos,
       endTimeNanos: endNanos,
@@ -398,17 +454,15 @@ function generateRealisticWalkData({
       value: [{ fpVal: calories }]
     });
 
-    // Timeline chart point for preview UI
     previewPoints.push({
       time: new Date(chunkStartMs).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       steps,
       distanceMeters,
       calories,
-      spm: Math.round(steps * (60 / (intervalSeconds))) // Steps Per Minute cadence
+      spm: Math.round(steps * (60 / intervalSeconds))
     });
   }
 
-  // Walking activity segment covering the entire duration (type 7 = walking)
   const minStartNanos = (BigInt(startMs) * 1000000n).toString();
   const maxEndNanos = (BigInt(endMs) * 1000000n).toString();
 
@@ -444,17 +498,11 @@ function generateRealisticWalkData({
   };
 }
 
-// 8. Preview Cadence & Time-based Steps (without writing to Google Fit)
+// 6. Preview Route
 app.post('/api/preview', (req, res) => {
   try {
-    const { totalSteps, startTime, endTime, paceType, device } = req.body;
-    const walkData = generateRealisticWalkData({
-      totalSteps: parseInt(totalSteps, 10),
-      startTime,
-      endTime,
-      paceType,
-      device
-    });
+    const validated = validateWalkInput(req.body);
+    const walkData = generateRealisticWalkData(validated);
 
     res.json({
       meta: walkData.meta,
@@ -475,7 +523,7 @@ async function getOrCreateDataSource(fitness, { typeName, streamName, valueForma
 
   const dataSourcePayload = {
     dataStreamName: streamName,
-    type: 'raw', // RAW indicates direct hardware sensor stream
+    type: 'raw',
     application: {
       name: 'StepHack Mobile Device Sensor',
       version: '1.0'
@@ -500,7 +548,6 @@ async function getOrCreateDataSource(fitness, { typeName, streamName, valueForma
     });
     return createRes.data.dataStreamId;
   } catch (err) {
-    // If it already exists or returns 409 conflict, list dataSources to find it
     if (err.code === 409 || err.message?.includes('already exists')) {
       const listRes = await fitness.users.dataSources.list({ userId: 'me' });
       const found = (listRes.data.dataSource || []).find(
@@ -512,28 +559,22 @@ async function getOrCreateDataSource(fitness, { typeName, streamName, valueForma
   }
 }
 
-// 9. Sync Steps directly to Google Fit
+// 7. Sync Steps to Google Fit
 app.post('/api/sync', async (req, res) => {
   try {
-    const oauth2Client = getOAuthClient();
-    if (!oauth2Client) {
-      return res.status(401).json({ error: 'Google Fit is not connected. Please connect first.' });
+    const oauth2Client = getOAuthClient(req);
+    if (!oauth2Client || !req.session?.tokens) {
+      return res.status(401).json({ error: 'Please sign in with Google first.' });
     }
 
-    const { totalSteps, startTime, endTime, paceType, device } = req.body;
-    const walkData = generateRealisticWalkData({
-      totalSteps: parseInt(totalSteps, 10),
-      startTime,
-      endTime,
-      paceType,
-      device
-    });
+    const validated = validateWalkInput(req.body);
+    const walkData = generateRealisticWalkData(validated);
 
     const fitness = google.fitness({ version: 'v1', auth: oauth2Client });
     const { minStartNanos, maxEndNanos } = walkData.meta;
     const datasetId = `${minStartNanos}-${maxEndNanos}`;
 
-    // 1. Step Count Delta Data Source
+    // 1. Step Count Delta
     const stepStreamId = await getOrCreateDataSource(fitness, {
       typeName: 'com.google.step_count.delta',
       streamName: 'StepHackPhoneStepSensor',
@@ -541,7 +582,6 @@ app.post('/api/sync', async (req, res) => {
       device: walkData.meta.device
     });
 
-    // Patch step dataset
     await fitness.users.dataSources.datasets.patch({
       userId: 'me',
       dataSourceId: stepStreamId,
@@ -554,7 +594,7 @@ app.post('/api/sync', async (req, res) => {
       }
     });
 
-    // 2. Distance Delta Data Source
+    // 2. Distance Delta
     const distStreamId = await getOrCreateDataSource(fitness, {
       typeName: 'com.google.distance.delta',
       streamName: 'StepHackPhoneDistanceSensor',
@@ -574,7 +614,7 @@ app.post('/api/sync', async (req, res) => {
       }
     });
 
-    // 3. Calories Expended Data Source
+    // 3. Calories Expended
     const calStreamId = await getOrCreateDataSource(fitness, {
       typeName: 'com.google.calories.expended',
       streamName: 'StepHackPhoneCalorieSensor',
@@ -614,8 +654,8 @@ app.post('/api/sync', async (req, res) => {
       }
     });
 
-    // Record in history log
-    const history = loadJson(LOGS_PATH, []);
+    // Save session-private history
+    if (!req.session.history) req.session.history = [];
     const logEntry = {
       id: Date.now(),
       timestamp: new Date().toISOString(),
@@ -623,13 +663,12 @@ app.post('/api/sync', async (req, res) => {
       distanceKm: walkData.meta.totalDistanceKm,
       caloriesKcal: walkData.meta.totalCaloriesKcal,
       durationMinutes: walkData.meta.durationMinutes,
-      startTime,
-      endTime,
+      startTime: req.body.startTime,
+      endTime: req.body.endTime,
       device: `${walkData.meta.device.manufacturer} ${walkData.meta.device.model}`
     };
-    history.unshift(logEntry);
-    // Keep last 30 logs
-    saveJson(LOGS_PATH, history.slice(0, 30));
+    req.session.history.unshift(logEntry);
+    req.session.history = req.session.history.slice(0, 20);
 
     res.json({
       success: true,
@@ -637,45 +676,32 @@ app.post('/api/sync', async (req, res) => {
       summary: logEntry
     });
   } catch (err) {
-    console.error('Error syncing to Google Fit:', err);
+    console.error('Error syncing to Google Fit:', err.message);
     res.status(500).json({
-      error: err.message,
-      details: err.response?.data || null
+      error: err.message || 'Failed to sync to Google Fit'
     });
   }
 });
 
-// 10. History route
+// 8. Session-private history route
 app.get('/api/history', (req, res) => {
-  const history = loadJson(LOGS_PATH, []);
+  const history = req.session?.history || [];
   res.json({ history });
 });
 
-// 11. QR Code route for mobile quick-open
+// 9. QR Code route
 app.get('/api/qrcode', async (req, res) => {
   const localIp = getLocalIp();
-  const url = `http://${localIp}:${PORT}`;
+  const url = isProd ? (process.env.REDIRECT_URI ? process.env.REDIRECT_URI.replace('/auth/callback', '') : `http://${localIp}:${PORT}`) : `http://${localIp}:${PORT}`;
   try {
     const dataUrl = await qrcode.toDataURL(url, { margin: 1, width: 250 });
     res.json({ url, dataUrl });
   } catch (err) {
-    res.status(500).json({ error: err.message });
+    res.status(500).json({ error: 'Failed to generate QR code' });
   }
 });
 
 // Start server
-app.listen(PORT, '0.0.0.0', async () => {
-  const localIp = getLocalIp();
-  console.log(`\n======================================================`);
-  console.log(`🚀 Step Hack Server is live!`);
-  console.log(`💻 Desktop:  http://localhost:${PORT}`);
-  console.log(`📱 Android:  http://${localIp}:${PORT}`);
-  console.log(`======================================================\n`);
-  try {
-    const qrTerminal = await qrcode.toString(`http://${localIp}:${PORT}`, { type: 'terminal', small: true });
-    console.log(`Scan with your Android phone camera to open directly:`);
-    console.log(qrTerminal);
-  } catch (e) {
-    // ignore
-  }
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`🚀 StepHack Secure Server running on port ${PORT} [Production: ${isProd}]`);
 });

@@ -395,7 +395,7 @@ async function handleSyncSteps() {
 
   if (!state.isConnected) {
     showToast('Please connect your Google Fit account first!', 'error');
-    openModal('modal-settings');
+    handleConnectGoogle();
     return;
   }
 
@@ -467,11 +467,23 @@ async function loadStatus() {
     } else {
       state.isConnected = false;
       dot.className = 'status-dot disconnected';
-      statusText.textContent = data.hasCredentials ? 'Google Account Login Required' : 'Google Cloud Setup Required';
+      statusText.textContent = (data.hasCredentials || data.serverConfigured) ? 'Click below to connect Google Fit' : 'Google Cloud Setup Required';
 
       profileRow.classList.add('hidden');
       statsRow.classList.add('hidden');
       notConnected.classList.remove('hidden');
+
+      // If server has credentials configured, hide manual credentials form in modal
+      const credsForm = document.getElementById('form-credentials');
+      const setupSteps = document.querySelector('.setup-steps');
+      const modalIntro = document.querySelector('.modal-intro');
+      if (data.serverConfigured && credsForm) {
+        credsForm.classList.add('hidden');
+        if (setupSteps) setupSteps.classList.add('hidden');
+        if (modalIntro) {
+          modalIntro.innerHTML = '🔒 <strong>Google OAuth is securely configured on the server.</strong><br>Visitors can simply tap <strong>"Connect Google Fit"</strong> to log in with 1 click.';
+        }
+      }
     }
   } catch (err) {
     console.error('Failed to load status:', err);
