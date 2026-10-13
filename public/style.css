@@ -12,8 +12,8 @@
   --primary-subtle: rgba(37, 99, 235, 0.12);
 
   --text-primary: #f8fafc;
-  --text-secondary: #94a3b8;
-  --text-muted: #64748b;
+  --text-secondary: #cbd5e1;
+  --text-muted: #94a3b8;
   --text-danger: #f87171;
   --accent-green: #10b981;
 
@@ -66,6 +66,8 @@ body {
   font-weight: 700;
   letter-spacing: -0.02em;
   color: var(--text-primary);
+  margin: 0;
+  line-height: 1.2;
 }
 
 .account-status {
@@ -420,7 +422,7 @@ body {
 .btn-subtle-link {
   background: none;
   border: none;
-  color: #3b82f6;
+  color: #60a5fa;
   font-size: 0.75rem;
   cursor: pointer;
 }

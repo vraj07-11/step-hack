@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <meta name="theme-color" content="#0b0f17">
   
   <title>StepHack — Log Steps &amp; Recover Activity in Google Fit</title>
@@ -10,6 +10,13 @@
   <meta name="keywords" content="google fit step logger, log steps google fit, add steps google fit manually, google fit activity sync, sync steps without phone, recover lost steps, adventure sync steps">
   <meta name="robots" content="index, follow">
   <link rel="canonical" href="https://step-hack.onrender.com/">
+
+  <!-- Favicon and App Icons -->
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png">
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+  <link rel="manifest" href="/site.webmanifest">
 
   <!-- Open Graph / Facebook -->
   <meta property="og:type" content="website">
@@ -102,7 +109,7 @@
     <!-- Header -->
     <header class="app-header">
       <div class="brand">
-        <span class="brand-name">StepHack</span>
+        <h1 class="brand-name">StepHack</h1>
       </div>
       <div class="account-status">
         <div id="auth-unlinked" class="auth-pill unlinked">
@@ -210,9 +217,9 @@
           <label for="input-steps" class="field-label">Steps</label>
         </div>
         <div class="step-stepper">
-          <button id="btn-step-minus" class="stepper-btn" type="button" aria-label="Minus 500">&minus;</button>
-          <input type="number" id="input-steps" class="step-input" value="5000" min="10" max="100000" step="100">
-          <button id="btn-step-plus" class="stepper-btn" type="button" aria-label="Plus 500">&plus;</button>
+          <button id="btn-step-minus" class="stepper-btn" type="button" aria-label="Decrease steps by 500">&minus;</button>
+          <input type="number" id="input-steps" class="step-input" value="5000" min="10" max="100000" step="100" aria-label="Number of steps">
+          <button id="btn-step-plus" class="stepper-btn" type="button" aria-label="Increase steps by 500">&plus;</button>
         </div>
         <div class="chips-row">
           <button type="button" class="chip" data-set="2000">2,000</button>
@@ -244,7 +251,7 @@
             <span class="slider-val"><span id="duration-val-text">45</span> minutes</span>
             <button type="button" id="btn-auto-duration" class="btn-subtle-link">Auto-fit pace</button>
           </div>
-          <input type="range" id="input-duration-range" class="range-slider" min="5" max="180" step="5" value="45">
+          <input type="range" id="input-duration-range" class="range-slider" min="5" max="180" step="5" value="45" aria-label="Walking duration in minutes">
           <div class="range-scale">
             <span>15m</span>
             <span>30m</span>
@@ -315,7 +322,7 @@
           <span id="chart-points-count" class="meta-xs">90 intervals</span>
         </div>
         <div class="canvas-holder">
-          <canvas id="cadence-canvas" width="560" height="110"></canvas>
+          <canvas id="cadence-canvas" width="560" height="110" role="img" aria-label="Cadence timeline chart"></canvas>
         </div>
         <div class="metrics-row">
           <div class="metric">
@@ -342,7 +349,7 @@
     <!-- History Panel -->
     <section class="panel-secondary">
       <div class="history-header">
-        <span class="field-label">Recent Sessions</span>
+        <h2 class="field-label">Recent Sessions</h2>
         <div class="history-actions">
           <button id="btn-clear-history" class="btn-subtle-link text-danger" type="button">Clear</button>
           <button id="btn-refresh-history" class="btn-subtle-link" type="button">Refresh</button>
