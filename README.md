@@ -32,8 +32,8 @@ To allow StepHack to communicate with your Google Fit account, Google requires y
 2. Choose **External** and click **Create**.
 3. App information:
    - App name: `StepHack`
-   - User support email: `Your Gmail`
-   - Developer contact email: `Your Gmail`
+   - User support email: `stephack@protonmail.com`
+   - Developer contact email: `stephack@protonmail.com`
 4. Click **Save and Continue** until you reach **Test users**.
 5. Under **Test users**, click **+ ADD USERS** and add your own Google email address.
 6. Click **Save and Continue**.
