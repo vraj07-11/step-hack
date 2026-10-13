@@ -322,6 +322,27 @@ function updatePreviewInstant() {
   if (spmEl) spmEl.textContent = `${avgCadence} spm`;
   if (countEl) countEl.textContent = `${totalIntervals} intervals`;
 
+  // Dynamic duration recommendation note
+  const adviceBox = document.getElementById('duration-advice-box');
+  const adviceText = document.getElementById('duration-advice-text');
+  if (adviceText) {
+    const suggestedMins = Math.max(5, Math.round(totalSteps / 110));
+    let timeStr = `${suggestedMins} mins`;
+    if (suggestedMins >= 60) {
+      const h = Math.floor(suggestedMins / 60);
+      const m = suggestedMins % 60;
+      timeStr = m > 0 ? `${h}h ${m}m` : `${h}h`;
+    }
+
+    if (avgCadence > 135) {
+      if (adviceBox) adviceBox.classList.add('advice-warning');
+      adviceText.innerHTML = `<strong>Pace Warning (${avgCadence} spm):</strong> Suggested duration is ~<strong>${timeStr}</strong> for ${totalSteps.toLocaleString()} steps (~110 spm) so Google Fit doesn't flag high-cadence data as fake.`;
+    } else {
+      if (adviceBox) adviceBox.classList.remove('advice-warning');
+      adviceText.innerHTML = `<strong>Suggested duration:</strong> ~<strong>${timeStr}</strong> for ${totalSteps.toLocaleString()} steps (~110 spm) so Google Fit registers natural human cadence and doesn't flag fake data.`;
+    }
+  }
+
   // Draw chart in next animation frame
   requestAnimationFrame(() => {
     renderCanvasChart(normalizedSteps);

@@ -233,6 +233,12 @@
           </div>
         </div>
 
+        <!-- Recommendation Note -->
+        <div id="duration-advice-box" class="advice-callout">
+          <svg class="advice-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>
+          <span id="duration-advice-text">Suggested duration: ~45 mins for 5,000 steps (~110 spm) so Google Fit registers natural human cadence.</span>
+        </div>
+
         <div id="view-mode-duration">
           <div class="slider-header">
             <span class="slider-val"><span id="duration-val-text">45</span> minutes</span>
@@ -288,14 +294,18 @@
       <!-- Device Sensor -->
       <div class="form-row">
         <div class="label-row">
-          <label for="select-device" class="field-label">Device profile</label>
+          <label for="select-device" class="field-label">Sensor device profile</label>
+          <span class="tag-subtle">Pixel 8 Pro recommended</span>
         </div>
         <select id="select-device" class="select-field">
-          <option value="Google|Pixel 8 Pro">Google Pixel 8 Pro</option>
+          <option value="Google|Pixel 8 Pro" selected>Google Pixel 8 Pro (Recommended)</option>
           <option value="Samsung|Galaxy S24 Ultra">Samsung Galaxy S24 Ultra</option>
           <option value="OnePlus|OnePlus 12">OnePlus 12</option>
           <option value="Xiaomi|Xiaomi 14">Xiaomi 14</option>
         </select>
+        <p class="field-note">
+          <strong>Note:</strong> You do not need to physically own this device. This simply selects the virtual hardware motion sensor profile sent to Google Fit so your steps count as genuine pedometer hardware data instead of a manual entry. Google Pixel 8 Pro is recommended for the highest native Google Fit sensor compatibility.
+        </p>
       </div>
 
       <!-- Timeline Preview Chart -->
@@ -350,33 +360,57 @@
       </div>
       <div class="faq-list">
         <details class="faq-item">
-          <summary class="faq-question">How does StepHack log steps into Google Fit?</summary>
+          <summary class="faq-question">
+            <span>How does StepHack log steps into Google Fit?</span>
+            <svg class="faq-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </summary>
           <div class="faq-answer">
             StepHack connects directly to the official Google Fitness REST API using OAuth 2.0. When you input your step count and walk duration, it generates realistic 30-second pedometer intervals with human-like cadence variation, calculating synchronized walking distance (meters) and calories burned before updating your Google Fit timeline.
           </div>
         </details>
         <details class="faq-item">
-          <summary class="faq-question">Why does StepHack distribute steps across time instead of adding a lump sum?</summary>
+          <summary class="faq-question">
+            <span>Why does StepHack distribute steps across time instead of adding a lump sum?</span>
+            <svg class="faq-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </summary>
           <div class="faq-answer">
             Standard manual activity additions in fitness apps create a single artificial spike that third-party sync engines and health programs often ignore. By distributing steps across realistic 30-second cadence chunks with warm-up and cool-down momentum, Google Fit registers the session as genuine continuous movement.
           </div>
         </details>
         <details class="faq-item">
-          <summary class="faq-question">Do logged steps sync with Pokémon GO Adventure Sync and Health Connect?</summary>
+          <summary class="faq-question">
+            <span>Do logged steps sync with Pokémon GO Adventure Sync and Health Connect?</span>
+            <svg class="faq-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </summary>
           <div class="faq-answer">
             Yes. Because StepHack registers data points under phone hardware sensor streams (<code>com.google.step_count.delta</code> on device type phone), Google Fit aggregates the steps into your daily totals, allowing apps that read from Google Fit or Health Connect to recognize the activity.
           </div>
         </details>
         <details class="faq-item">
-          <summary class="faq-question">Is StepHack safe and private to use?</summary>
+          <summary class="faq-question">
+            <span>Is StepHack safe and private to use?</span>
+            <svg class="faq-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </summary>
           <div class="faq-answer">
             Yes. StepHack operates in compliance with Google API Services User Data Policies. Your authentication tokens are stored exclusively in your browser's encrypted session, and no health datasets are ever stored, indexed, or shared with third parties.
           </div>
         </details>
         <details class="faq-item">
-          <summary class="faq-question">What is the recommended walking cadence for realistic tracking?</summary>
+          <summary class="faq-question">
+            <span>What is the recommended walking cadence for realistic tracking?</span>
+            <svg class="faq-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </summary>
           <div class="faq-answer">
-            Natural human walking pace typically averages between 100 and 115 steps per minute (~4.5 to 5.0 km/h). Use the &ldquo;Auto-fit pace&rdquo; feature in the duration slider to automatically calibrate the optimal duration for your step count.
+            Natural human walking pace typically averages between 100 and 115 steps per minute (~4.5 to 5.0 km/h). Use the &ldquo;Auto-fit pace&rdquo; feature in the duration slider to automatically calibrate the optimal duration for your step count so Google Fit doesn't flag high-cadence anomalies.
+          </div>
+        </details>
+        <details class="faq-item">
+          <summary class="faq-question">
+            <span>Do I need to physically own the phone selected in the device profile?</span>
+            <svg class="faq-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"></polyline></svg>
+          </summary>
+          <div class="faq-answer">
+            No. You can use StepHack from any device (phone, tablet, or desktop). The device profile provides virtual hardware sensor metadata to Google Fit's data collector so your session registers as genuine phone pedometer hardware readings rather than an untracked manual entry. We recommend <strong>Google Pixel 8 Pro</strong> as it offers native first-party sensor stream compatibility with Google Fit.
           </div>
         </details>
       </div>
