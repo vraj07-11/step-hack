@@ -23,22 +23,70 @@
   <meta name="twitter:title" content="StepHack — Log Steps &amp; Recover Activity in Google Fit">
   <meta name="twitter:description" content="Log steps directly to Google Fit with realistic cadence and time distribution.">
 
-  <!-- JSON-LD Structured Data -->
+  <!-- JSON-LD Structured Data (Web App & FAQPage Schema) -->
   <script type="application/ld+json">
-  {
-    "@context": "https://schema.org",
-    "@type": "WebApplication",
-    "name": "StepHack",
-    "url": "https://step-hack.onrender.com/",
-    "description": "Activity logging and manual session recovery tool for Google Fit with realistic cadence and distance calculation.",
-    "applicationCategory": "HealthApplication",
-    "operatingSystem": "Web, Android, iOS",
-    "offers": {
-      "@type": "Offer",
-      "price": "0",
-      "priceCurrency": "USD"
+  [
+    {
+      "@context": "https://schema.org",
+      "@type": "WebApplication",
+      "name": "StepHack",
+      "url": "https://step-hack.onrender.com/",
+      "description": "Activity logging and manual session recovery tool for Google Fit with realistic cadence and distance calculation.",
+      "applicationCategory": "HealthApplication",
+      "operatingSystem": "Web, Android, iOS",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      }
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "FAQPage",
+      "mainEntity": [
+        {
+          "@type": "Question",
+          "name": "How does StepHack log steps into Google Fit?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "StepHack connects directly to the official Google Fitness REST API using OAuth 2.0, generating realistic 30-second pedometer intervals with human-like cadence variation, calculating synchronized walking distance and calories burned before updating your Google Fit timeline."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Why does StepHack distribute steps across time instead of adding a lump sum?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Standard manual activity additions create a single artificial spike that third-party sync engines often ignore. Distributing steps across realistic cadence chunks allows Google Fit to register the session as genuine continuous movement."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Do logged steps sync with Pokémon GO Adventure Sync and Health Connect?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. Because StepHack registers data points under phone hardware sensor streams, Google Fit aggregates the steps into your daily totals, allowing apps that read from Google Fit or Health Connect to recognize the activity."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "Is StepHack safe and private to use?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Yes. StepHack operates in compliance with Google API Services User Data Policies. Your authentication tokens are stored exclusively in your browser session, and no health datasets are ever stored or shared."
+          }
+        },
+        {
+          "@type": "Question",
+          "name": "What is the recommended walking cadence for realistic tracking?",
+          "acceptedAnswer": {
+            "@type": "Answer",
+            "text": "Natural human walking pace typically averages between 100 and 115 steps per minute. Use the Auto-fit pace feature to automatically calibrate the optimal duration for your step count."
+          }
+        }
+      ]
     }
-  }
+  ]
   </script>
 
   <link rel="dns-prefetch" href="https://fonts.googleapis.com">
@@ -277,6 +325,45 @@
       </div>
       <div id="history-list" class="history-entries">
         <div class="empty-state">No sessions logged in this session yet.</div>
+      </div>
+    </section>
+
+    <!-- Frequently Asked Questions (SEO Optimized) -->
+    <section class="panel-secondary faq-panel">
+      <div class="faq-header">
+        <h2 class="field-label">Frequently Asked Questions</h2>
+      </div>
+      <div class="faq-list">
+        <details class="faq-item">
+          <summary class="faq-question">How does StepHack log steps into Google Fit?</summary>
+          <div class="faq-answer">
+            StepHack connects directly to the official Google Fitness REST API using OAuth 2.0. When you input your step count and walk duration, it generates realistic 30-second pedometer intervals with human-like cadence variation, calculating synchronized walking distance (meters) and calories burned before updating your Google Fit timeline.
+          </div>
+        </details>
+        <details class="faq-item">
+          <summary class="faq-question">Why does StepHack distribute steps across time instead of adding a lump sum?</summary>
+          <div class="faq-answer">
+            Standard manual activity additions in fitness apps create a single artificial spike that third-party sync engines and health programs often ignore. By distributing steps across realistic 30-second cadence chunks with warm-up and cool-down momentum, Google Fit registers the session as genuine continuous movement.
+          </div>
+        </details>
+        <details class="faq-item">
+          <summary class="faq-question">Do logged steps sync with Pokémon GO Adventure Sync and Health Connect?</summary>
+          <div class="faq-answer">
+            Yes. Because StepHack registers data points under phone hardware sensor streams (<code>com.google.step_count.delta</code> on device type phone), Google Fit aggregates the steps into your daily totals, allowing apps that read from Google Fit or Health Connect to recognize the activity.
+          </div>
+        </details>
+        <details class="faq-item">
+          <summary class="faq-question">Is StepHack safe and private to use?</summary>
+          <div class="faq-answer">
+            Yes. StepHack operates in compliance with Google API Services User Data Policies. Your authentication tokens are stored exclusively in your browser's encrypted session, and no health datasets are ever stored, indexed, or shared with third parties.
+          </div>
+        </details>
+        <details class="faq-item">
+          <summary class="faq-question">What is the recommended walking cadence for realistic tracking?</summary>
+          <div class="faq-answer">
+            Natural human walking pace typically averages between 100 and 115 steps per minute (~4.5 to 5.0 km/h). Use the &ldquo;Auto-fit pace&rdquo; feature in the duration slider to automatically calibrate the optimal duration for your step count.
+          </div>
+        </details>
       </div>
     </section>
 
