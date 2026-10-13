@@ -223,6 +223,20 @@ function bindEvents() {
   if (btnDisconnect) btnDisconnect.addEventListener('click', handleDisconnect);
   if (btnRefreshHistory) btnRefreshHistory.addEventListener('click', loadHistory);
 
+  // Smart real-time background sync every 45s (only when tab is visible, saving battery/data)
+  setInterval(() => {
+    if (state.isConnected && document.visibilityState === 'visible') {
+      loadTodaySteps();
+    }
+  }, 45000);
+
+  // Instant data refresh upon tab refocus/visibility change
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible' && state.isConnected) {
+      loadTodaySteps();
+    }
+  });
+
   // Re-render chart on orientation change or window resize
   window.addEventListener('resize', () => {
     if (!renderScheduled) {
@@ -470,14 +484,19 @@ async function loadStatus() {
 async function loadTodaySteps() {
   if (!state.isConnected) return;
   const stepValEl = document.getElementById('today-steps-val');
+  const distValEl = document.getElementById('today-dist-val');
+  const calValEl = document.getElementById('today-cal-val');
+  const timeEl = document.getElementById('today-sync-time');
   const profToday = document.getElementById('prof-today-steps');
-  if (stepValEl) stepValEl.textContent = '...';
 
   try {
     const res = await fetch('/api/today-steps');
     if (res.ok) {
       const data = await res.json();
       if (stepValEl) stepValEl.textContent = formatNum(data.todaySteps);
+      if (distValEl) distValEl.textContent = `${data.todayDistanceKm} km`;
+      if (calValEl) calValEl.textContent = `${formatNum(data.todayCaloriesKcal)} kcal`;
+      if (timeEl && data.lastUpdated) timeEl.textContent = data.lastUpdated;
       if (profToday) profToday.textContent = formatNum(data.todaySteps);
       state.todaySteps = data.todaySteps;
     }

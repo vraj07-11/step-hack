@@ -337,9 +337,11 @@ app.get('/api/today-steps', async (req, res) => {
     const aggregateRes = await fitness.users.dataset.aggregate({
       userId: 'me',
       requestBody: {
-        aggregateBy: [{
-          dataTypeName: 'com.google.step_count.delta'
-        }],
+        aggregateBy: [
+          { dataTypeName: 'com.google.step_count.delta' },
+          { dataTypeName: 'com.google.distance.delta' },
+          { dataTypeName: 'com.google.calories.expended' }
+        ],
         bucketByTime: { durationMillis: 86400000 },
         startTimeMillis: startOfDay,
         endTimeMillis: endOfDay
@@ -347,20 +349,44 @@ app.get('/api/today-steps', async (req, res) => {
     });
 
     let totalSteps = 0;
+    let totalDistanceMeters = 0;
+    let totalCalories = 0;
+
     const buckets = aggregateRes.data.bucket || [];
     for (const bucket of buckets) {
       for (const dataset of bucket.dataset || []) {
+        const streamId = dataset.dataSourceId || '';
         for (const point of dataset.point || []) {
           for (const val of point.value || []) {
             if (val.intVal) {
               totalSteps += val.intVal;
+            } else if (typeof val.fpVal === 'number') {
+              if (streamId.includes('distance')) {
+                totalDistanceMeters += val.fpVal;
+              } else if (streamId.includes('calories')) {
+                totalCalories += val.fpVal;
+              }
             }
           }
         }
       }
     }
 
-    res.json({ todaySteps: totalSteps, date: now.toDateString() });
+    // If distance or calories weren't registered by external trackers, calculate standard equivalents
+    const totalDistanceKm = totalDistanceMeters > 0
+      ? parseFloat((totalDistanceMeters / 1000).toFixed(2))
+      : parseFloat((totalSteps * 0.74 / 1000).toFixed(2));
+
+    const totalCaloriesKcal = totalCalories > 0
+      ? Math.round(totalCalories)
+      : Math.round(totalSteps * 0.042);
+
+    res.json({
+      todaySteps: totalSteps,
+      todayDistanceKm,
+      todayCaloriesKcal,
+      lastUpdated: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    });
   } catch (err) {
     res.status(500).json({ error: 'Failed to fetch today steps' });
   }

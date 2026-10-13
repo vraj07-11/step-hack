@@ -121,8 +121,8 @@
             <div class="profile-card-header">
               <img id="profile-menu-avatar" class="avatar-lg" src="" alt="Avatar">
               <div class="profile-card-info">
-                <span id="profile-menu-name" class="profile-card-name">User</span>
-                <span id="profile-menu-email" class="profile-card-email">user@gmail.com</span>
+                <span id="profile-menu-name" class="profile-card-name">&mdash;</span>
+                <span id="profile-menu-email" class="profile-card-email">&mdash;</span>
               </div>
             </div>
             
@@ -171,20 +171,35 @@
       </button>
     </div>
 
-    <!-- Today's Fit steps counter (visible when connected) -->
+    <!-- Today's Live Google Fit Data Card (visible when connected) -->
     <div id="today-counter-card" class="today-bar hidden">
-      <div class="today-info">
-        <span class="label-xs">TODAY'S RECORDED STEPS</span>
+      <div class="today-primary">
+        <div class="today-title-row">
+          <span class="live-dot" title="Live Google Fit Sync"></span>
+          <span class="label-xs">GOOGLE FIT TODAY</span>
+          <span id="today-sync-time" class="meta-time"></span>
+        </div>
         <div class="today-val-row">
           <span id="today-steps-val" class="today-number">0</span>
           <span class="today-unit">steps</span>
         </div>
       </div>
-      <button id="btn-refresh-fit" class="btn-icon-subtle" title="Refresh step count" aria-label="Refresh">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
-        </svg>
-      </button>
+      
+      <div class="today-secondary-metrics">
+        <div class="today-sub-metric">
+          <span class="label-tiny">DIST</span>
+          <span id="today-dist-val" class="sub-val">0.00 km</span>
+        </div>
+        <div class="today-sub-metric">
+          <span class="label-tiny">CAL</span>
+          <span id="today-cal-val" class="sub-val">0 kcal</span>
+        </div>
+        <button id="btn-refresh-fit" class="btn-icon-subtle" title="Refresh step count" aria-label="Refresh">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+          </svg>
+        </button>
+      </div>
     </div>
 
     <!-- Main Logging Form -->
