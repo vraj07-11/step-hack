@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#0d1117">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <title>StepHack — Realistic Google Fit Step Logger</title>
+  <meta name="description" content="Log realistic sensor-based steps to Google Fit with time-distributed cadence, distance, and calories.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Ambient background glow elements -->
+  <div class="ambient-glow glow-1"></div>
+  <div class="ambient-glow glow-2"></div>
+
+  <div class="app-container">
+    <!-- Header -->
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-icon">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+          </svg>
+        </div>
+        <div>
+          <h1 class="brand-title">StepHack</h1>
+          <p class="brand-subtitle">Sensor-Grade Google Fit Sync</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button id="btn-qr-modal" class="btn-icon" title="Open on Android phone" aria-label="Open on Android phone">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="3" y="3" width="7" height="7"></rect>
+            <rect x="14" y="3" width="7" height="7"></rect>
+            <rect x="14" y="14" width="7" height="7"></rect>
+            <rect x="3" y="14" width="7" height="7"></rect>
+          </svg>
+        </button>
+        <button id="btn-settings-modal" class="btn-icon" title="Google Fit Settings & Setup" aria-label="Settings">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="3"></circle>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- Google Fit Connection & Live Status Banner -->
+    <div id="status-card" class="card status-card">
+      <div class="status-header">
+        <div class="status-indicator">
+          <span id="status-dot" class="status-dot disconnected"></span>
+          <span id="status-text" class="status-text">Checking Google Fit connection...</span>
+        </div>
+        <button id="btn-refresh-fit" class="btn-text-icon" title="Refresh step count" aria-label="Refresh steps">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+          </svg>
+        </button>
+      </div>
+
+      <!-- Logged-in profile preview -->
+      <div id="user-profile-row" class="user-profile-row hidden">
+        <img id="user-avatar" class="user-avatar" src="" alt="Google User" />
+        <div class="user-details">
+          <div id="user-name" class="user-name">Google User</div>
+          <div id="user-email" class="user-email">email@gmail.com</div>
+        </div>
+        <button id="btn-disconnect" class="btn-disconnect" title="Disconnect account">Disconnect</button>
+      </div>
+
+      <!-- Live Step Counter from Google Fit -->
+      <div id="fit-stats-row" class="fit-stats-row hidden">
+        <div class="fit-stat-item">
+          <span class="fit-stat-label">TODAY'S GOOGLE FIT STEPS</span>
+          <div class="fit-stat-val-group">
+            <span id="today-steps-val" class="fit-stat-value">0</span>
+            <span class="fit-stat-unit">steps</span>
+          </div>
+        </div>
+        <div class="fit-stat-badge">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>
+          Sensor Sync Active
+        </div>
+      </div>
+
+      <!-- Action prompt if not connected -->
+      <div id="not-connected-banner" class="not-connected-banner">
+        <p>Connect your Google account to log steps directly into Google Fit as raw phone sensor motion.</p>
+        <button id="btn-connect-google" class="btn-primary-connect">
+          <svg viewBox="0 0 24 24" width="18" height="18" viewBox="0 0 24 24"><path fill="#EA4335" d="M12 5c1.56 0 2.96.54 4.07 1.43l3.04-3.04C17.26 1.7 14.8 1 12 1 7.42 1 3.51 3.61 1.62 7.37l3.71 2.88C6.22 7.37 8.87 5 12 5z"/><path fill="#4285F4" d="M23.49 12.27c0-.79-.07-1.54-.19-2.27H12v4.51h6.47c-.29 1.48-1.14 2.73-2.4 3.58l3.7 2.87c2.16-2 3.72-4.94 3.72-8.69z"/><path fill="#FBBC05" d="M5.33 14.75c-.24-.72-.38-1.49-.38-2.28 0-.79.14-1.56.38-2.28L1.62 7.37C.59 9.42 0 11.66 0 12c0 .34.59 2.58 1.62 4.63l3.71-2.88z"/><path fill="#34A853" d="M12 23c3.24 0 5.95-1.08 7.93-2.91l-3.7-2.87c-1.08.72-2.45 1.16-4.23 1.16-3.13 0-5.78-2.37-6.67-5.25L1.62 16c1.89 3.76 5.8 6.37 10.38 6.37z"/></svg>
+          Connect Google Fit
+        </button>
+      </div>
+    </div>
+
+    <!-- Main Step Logging Card -->
+    <main class="card main-form-card">
+      <div class="card-title-row">
+        <h2 class="card-title">Log Step Session</h2>
+        <span class="badge-tag">Raw Phone Hardware</span>
+      </div>
+
+      <!-- Step Count Input Section -->
+      <section class="form-section">
+        <label for="input-steps" class="section-label">HOW MANY STEPS DID YOU WALK?</label>
+        <div class="step-input-wrapper">
+          <button id="btn-step-minus" class="step-btn-stepper" aria-label="Decrease 500 steps">-</button>
+          <input type="number" id="input-steps" class="step-number-input" value="5000" min="10" max="100000" step="100" />
+          <button id="btn-step-plus" class="step-btn-stepper" aria-label="Increase 500 steps">+</button>
+        </div>
+
+        <!-- Quick increment chips -->
+        <div class="quick-chips">
+          <button type="button" class="chip-btn" data-add="500">+500</button>
+          <button type="button" class="chip-btn" data-add="1000">+1,000</button>
+          <button type="button" class="chip-btn" data-add="2500">+2,500</button>
+          <button type="button" class="chip-btn" data-set="5000">5,000</button>
+          <button type="button" class="chip-btn" data-set="10000">10,000</button>
+        </div>
+      </section>
+
+      <!-- Time Duration Section -->
+      <section class="form-section">
+        <div class="section-label-row">
+          <span class="section-label">TIME & DURATION</span>
+          <div class="mode-switch">
+            <button type="button" id="tab-mode-duration" class="mode-tab active">Ended Just Now</button>
+            <button type="button" id="tab-mode-range" class="mode-tab">Custom Time</button>
+          </div>
+        </div>
+
+        <!-- Mode A: Ended Just Now (Duration slider & presets) -->
+        <div id="view-mode-duration" class="mode-content">
+          <div class="duration-control-row">
+            <span class="duration-display"><span id="duration-val-text">45</span> min walk</span>
+            <button type="button" id="btn-auto-duration" class="btn-link" title="Calculate natural walking duration based on step count">
+              ✨ Auto-calculate pace
+            </button>
+          </div>
+          <input type="range" id="input-duration-range" class="duration-slider" min="5" max="180" step="5" value="45">
+          <div class="slider-ticks">
+            <span>15m</span>
+            <span>30m</span>
+            <span>45m</span>
+            <span>60m</span>
+            <span>90m</span>
+            <span>120m</span>
+          </div>
+        </div>
+
+        <!-- Mode B: Custom Time Range -->
+        <div id="view-mode-range" class="mode-content hidden">
+          <div class="datetime-grid">
+            <div class="form-group">
+              <label for="input-start-time" class="field-label">Walk Start Time</label>
+              <input type="datetime-local" id="input-start-time" class="datetime-input">
+            </div>
+            <div class="form-group">
+              <label for="input-end-time" class="field-label">Walk End Time</label>
+              <input type="datetime-local" id="input-end-time" class="datetime-input">
+            </div>
+          </div>
+        </div>
+
+        <!-- Cadence Health Indicator -->
+        <div id="cadence-indicator-box" class="cadence-box optimal">
+          <div class="cadence-icon">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+          </div>
+          <div class="cadence-info">
+            <span id="cadence-rate-text" class="cadence-rate">111 steps/min</span>
+            <span id="cadence-desc-text" class="cadence-desc">Natural healthy walking pace. High acceptance rate.</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Walking Pace Style -->
+      <section class="form-section">
+        <label class="section-label">WALKING STYLE & INTENSITY</label>
+        <div class="pace-selector-grid">
+          <label class="pace-radio-card active">
+            <input type="radio" name="paceType" value="natural" checked>
+            <div class="pace-icon">🚶</div>
+            <div class="pace-title">Natural Walk</div>
+            <div class="pace-sub">~100-115 SPM</div>
+          </label>
+          <label class="pace-radio-card">
+            <input type="radio" name="paceType" value="brisk">
+            <div class="pace-icon">🏃</div>
+            <div class="pace-title">Brisk Walk</div>
+            <div class="pace-sub">~120-135 SPM</div>
+          </label>
+          <label class="pace-radio-card">
+            <input type="radio" name="paceType" value="jog">
+            <div class="pace-icon">👟</div>
+            <div class="pace-title">Light Jog</div>
+            <div class="pace-sub">~145-160 SPM</div>
+          </label>
+        </div>
+      </section>
+
+      <!-- Device Sensor Emulation -->
+      <section class="form-section">
+        <div class="section-label-row">
+          <label for="select-device" class="section-label">SOURCE DEVICE EMULATION</label>
+          <span class="info-tag">Hardware Sensor Stream</span>
+        </div>
+        <select id="select-device" class="device-select">
+          <option value="Google|Pixel 8 Pro">Google Pixel 8 Pro (Recommended)</option>
+          <option value="Samsung|Galaxy S24 Ultra">Samsung Galaxy S24 Ultra</option>
+          <option value="Google|Pixel 7">Google Pixel 7</option>
+          <option value="OnePlus|OnePlus 12">OnePlus 12</option>
+          <option value="Xiaomi|Xiaomi 14">Xiaomi 14</option>
+          <option value="Samsung|Galaxy A54">Samsung Galaxy A54</option>
+        </select>
+        <p class="field-hint">
+          Google Fit treats this as real raw pedometer hardware interrupts (<code class="code-pill">type: raw</code>), so steps count in fitness challenges, insurance apps, and Adventure Sync.
+        </p>
+      </section>
+
+      <!-- Real-time Cadence Preview Chart -->
+      <section class="form-section chart-section">
+        <div class="section-label-row">
+          <span class="section-label">REALISTIC SENSOR TIMELINE PREVIEW</span>
+          <span id="chart-points-count" class="badge-sub">90 intervals (30s each)</span>
+        </div>
+
+        <div class="chart-wrapper">
+          <canvas id="cadence-canvas" width="600" height="140"></canvas>
+        </div>
+
+        <!-- Calculated Metrics Bar -->
+        <div class="metrics-grid">
+          <div class="metric-card">
+            <span class="metric-label">EST. DISTANCE</span>
+            <span id="metric-dist" class="metric-val">3.70 km</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">CALORIES</span>
+            <span id="metric-cal" class="metric-val">210 kcal</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">AVG CADENCE</span>
+            <span id="metric-spm" class="metric-val">111 spm</span>
+          </div>
+          <div class="metric-card">
+            <span class="metric-label">ACTIVITY</span>
+            <span class="metric-val text-accent">Walking</span>
+          </div>
+        </div>
+      </section>
+
+      <!-- Big Sync Button -->
+      <div class="sync-action-wrapper">
+        <button id="btn-sync-steps" class="btn-sync-main">
+          <span class="btn-sync-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"></path>
+            </svg>
+          </span>
+          <span class="btn-sync-text">Log Steps to Google Fit</span>
+        </button>
+      </div>
+    </main>
+
+    <!-- Recent History Section -->
+    <section class="card history-card">
+      <div class="card-title-row">
+        <h3 class="card-title-sm">Recent Synced Sessions</h3>
+        <button id="btn-refresh-history" class="btn-text-link">Refresh</button>
+      </div>
+      <div id="history-list" class="history-list">
+        <div class="empty-history">No logged sessions yet. Your synced walks will appear here.</div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="app-footer">
+      <p>StepHack • Real-time hardware step generation engine for Google Fit</p>
+    </footer>
+  </div>
+
+  <!-- MODAL: Settings & Google Cloud Setup Guide -->
+  <div id="modal-settings" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 class="modal-title">Google Fit Setup & Credentials</h3>
+        <button class="modal-close" data-close="modal-settings">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-intro">
+          To log data into Google Fit, Google requires a free OAuth Client ID from Google Cloud Console. Follow these quick steps:
+        </p>
+
+        <div class="setup-steps">
+          <div class="setup-step">
+            <div class="step-num">1</div>
+            <div class="step-content">
+              <strong>Open Google Cloud Console</strong>
+              <p>Go to <a href="https://console.cloud.google.com/" target="_blank" rel="noopener">Google Cloud Console</a> and create a new project named <code>StepHack</code>.</p>
+            </div>
+          </div>
+
+          <div class="setup-step">
+            <div class="step-num">2</div>
+            <div class="step-content">
+              <strong>Enable the Fitness API</strong>
+              <p>Go to <strong>APIs & Services &rarr; Library</strong>, search for <strong>Fitness API</strong>, and click <strong>Enable</strong>.</p>
+            </div>
+          </div>
+
+          <div class="setup-step">
+            <div class="step-num">3</div>
+            <div class="step-content">
+              <strong>OAuth Consent Screen</strong>
+              <p>Go to <strong>OAuth consent screen</strong> &rarr; Select <strong>External</strong> &rarr; Fill App name (<code>StepHack</code>) & email &rarr; Under <strong>Test users</strong>, add your Google account email.</p>
+            </div>
+          </div>
+
+          <div class="setup-step">
+            <div class="step-num">4</div>
+            <div class="step-content">
+              <strong>Create OAuth 2.0 Client ID</strong>
+              <p>Go to <strong>Credentials &rarr; Create Credentials &rarr; OAuth client ID</strong>:</p>
+              <ul>
+                <li>Application type: <strong>Web application</strong></li>
+                <li>Authorized redirect URIs:
+                  <div class="copy-box">
+                    <code id="uri-localhost">http://localhost:3000/auth/callback</code>
+                    <button class="btn-copy" data-copy="uri-localhost">Copy</button>
+                  </div>
+                  <div class="copy-box mt-2">
+                    <code id="uri-lan">http://192.168.x.x:3000/auth/callback</code>
+                    <button class="btn-copy" data-copy="uri-lan">Copy</button>
+                  </div>
+                </li>
+              </ul>
+            </div>
+          </div>
+
+          <div class="setup-step">
+            <div class="step-num">5</div>
+            <div class="step-content">
+              <strong>Paste Credentials Below</strong>
+              <p>Paste the Client ID and Client Secret generated in Step 4:</p>
+            </div>
+          </div>
+        </div>
+
+        <form id="form-credentials" class="creds-form">
+          <div class="form-group">
+            <label for="cfg-client-id" class="field-label">Google Client ID</label>
+            <input type="text" id="cfg-client-id" class="text-input" placeholder="xxxxxxxxxxxx-xxxx.apps.googleusercontent.com" required>
+          </div>
+          <div class="form-group">
+            <label for="cfg-client-secret" class="field-label">Google Client Secret</label>
+            <input type="password" id="cfg-client-secret" class="text-input" placeholder="GOCSPX-xxxxxxxxxxxxxxxx" required>
+          </div>
+          <button type="submit" id="btn-save-credentials" class="btn-primary-block">Save Credentials</button>
+        </form>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL: Open on Android Phone (QR Code) -->
+  <div id="modal-qr" class="modal-overlay hidden" role="dialog" aria-modal="true">
+    <div class="modal-content modal-sm text-center">
+      <div class="modal-header">
+        <h3 class="modal-title">Open on Android Phone</h3>
+        <button class="modal-close" data-close="modal-qr">&times;</button>
+      </div>
+      <div class="modal-body">
+        <p class="modal-sub">Scan this QR code with your Android camera or Google Lens to use StepHack on your phone:</p>
+        <div class="qr-container">
+          <img id="qr-image" src="" alt="Scan QR code for mobile URL" />
+        </div>
+        <div class="mobile-url-box">
+          <span id="mobile-url-text" class="mobile-url">http://...</span>
+          <button id="btn-copy-mobile-url" class="btn-copy">Copy URL</button>
+        </div>
+        <p class="text-muted-xs mt-3">Make sure your Android phone is connected to the same Wi-Fi network!</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="toast-container" aria-live="polite"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>
