@@ -1,0 +1,6 @@
+User-agent: *
+Allow: /
+Allow: /privacy.html
+Allow: /terms.html
+
+Sitemap: https://step-hack.onrender.com/sitemap.xml

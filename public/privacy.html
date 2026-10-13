@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — StepHack</title>
+  <meta name="description" content="Privacy Policy for StepHack Google Fit activity logger and manual session recovery service.">
+  <meta name="robots" content="index, follow">
+  <link rel="canonical" href="https://step-hack.onrender.com/privacy.html">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <style>
+    .legal-container {
+      width: 100%;
+      max-width: 680px;
+      padding: 32px 18px 60px;
+      margin: 0 auto;
+    }
+    .legal-header {
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .legal-header h1 {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--text-primary);
+      margin-bottom: 6px;
+    }
+    .legal-date {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+    }
+    .legal-content {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      font-size: 0.88rem;
+      color: var(--text-secondary);
+      line-height: 1.65;
+    }
+    .legal-content h2 {
+      font-size: 1.05rem;
+      font-weight: 600;
+      color: var(--text-primary);
+      margin-top: 10px;
+      margin-bottom: 6px;
+    }
+    .legal-content p, .legal-content ul {
+      margin-bottom: 8px;
+    }
+    .legal-content ul {
+      padding-left: 20px;
+    }
+    .legal-content li {
+      margin-bottom: 4px;
+    }
+    .back-nav {
+      margin-bottom: 18px;
+    }
+    .back-link {
+      color: #3b82f6;
+      font-size: 0.82rem;
+      text-decoration: none;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+    .back-link:hover {
+      text-decoration: underline;
+    }
+  </style>
+</head>
+<body>
+  <div class="legal-container">
+    <div class="back-nav">
+      <a href="/" class="back-link">&larr; Back to StepHack</a>
+    </div>
+
+    <header class="legal-header">
+      <h1>Privacy Policy</h1>
+      <span class="legal-date">Last Updated: October 2026</span>
+    </header>
+
+    <div class="legal-content">
+      <section>
+        <h2>1. Overview</h2>
+        <p>StepHack (&ldquo;the Service&rdquo;) provides an activity synchronization and manual exercise recovery tool designed to assist individuals in documenting unrecorded walking and physical activity within the Google Fit fitness platform. We value user privacy and design our architecture to operate with zero permanent user data retention.</p>
+      </section>
+
+      <section>
+        <h2>2. Data Collection and Usage</h2>
+        <p>The Service is designed as an interface pass-through utility. We adhere strictly to the principle of data minimization:</p>
+        <ul>
+          <li><strong>Google Account Data:</strong> When authenticating via Google OAuth 2.0, temporary authentication tokens are utilized exclusively within your encrypted browser session to communicate with Google Fit APIs on your behalf.</li>
+          <li><strong>Fitness Metrics:</strong> Exercise parameters inputted into the application (such as step counts, timestamps, estimated duration, and pace) are transmitted directly to Google Fit via encrypted TLS/HTTPS protocols.</li>
+          <li><strong>No Server-Side Health Storage:</strong> We do not store, catalog, sell, or analyze your Google Fit health datasets, step counts, or profile data on external databases.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>3. Google API Services User Data Policy</h2>
+        <p>StepHack's use and transfer to any other app of information received from Google APIs will adhere to the <a href="https://developers.google.com/terms/api-services-user-data-policy" target="_blank" rel="noopener" style="color: #3b82f6;">Google API Services User Data Policy</a>, including the Limited Use requirements.</p>
+        <p>Specifically:</p>
+        <ul>
+          <li>We only request permissions strictly required to read and write activity data requested by the user (<code>fitness.activity.write</code>, <code>fitness.location.write</code>, <code>fitness.body.write</code>).</li>
+          <li>We do not transfer or disclose user health information to third-party advertising platforms, data brokers, or external entities.</li>
+          <li>We do not use Google Fit data for serving advertisements.</li>
+        </ul>
+      </section>
+
+      <section>
+        <h2>4. Data Security</h2>
+        <p>All client-server communications are encrypted in transit via standard Transport Layer Security (TLS 1.2 / 1.3). User sessions utilize cryptographically signed, secure, HTTP-only cookie identifiers to prevent cross-site scripting (XSS) and unauthorized token extraction.</p>
+      </section>
+
+      <section>
+        <h2>5. Revocation of Access</h2>
+        <p>Users maintain full sovereignty over their Google account permissions at all times. You can terminate authentication at any moment by clicking &ldquo;Sign out&rdquo; within the application or by revoking StepHack permissions directly in your <a href="https://myaccount.google.com/permissions" target="_blank" rel="noopener" style="color: #3b82f6;">Google Account Security Settings</a>.</p>
+      </section>
+
+      <section>
+        <h2>6. Inquiries and Contact</h2>
+        <p>For questions or verification regarding this Privacy Policy, please contact our support team at: <code>privacy@step-hack.onrender.com</code>.</p>
+      </section>
+    </div>
+  </div>
+</body>
+</html>
