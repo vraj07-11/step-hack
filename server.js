@@ -51,8 +51,15 @@ app.use(
   })
 );
 
+const compression = require('compression');
+app.use(compression());
+
 app.use(express.json({ limit: '50kb' }));
-app.use(express.static(path.join(__dirname, 'public')));
+app.use(express.static(path.join(__dirname, 'public'), {
+  maxAge: isProd ? '1d' : '1h',
+  etag: true,
+  lastModified: true
+}));
 
 // 3. Rate Limiters
 // General API limiter: 120 requests per minute
