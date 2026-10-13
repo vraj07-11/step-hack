@@ -221,7 +221,10 @@ function validateWalkInput({ totalSteps, startTime, endTime, paceType, device })
   };
 }
 
-// ---------------------- API ROUTES ----------------------
+// Lightweight health / keep-alive ping route (for UptimeRobot / cron bots)
+app.get('/health', (req, res) => {
+  res.status(200).send('OK');
+});
 
 // 1. Status route: Returns user session info without leaking secrets
 app.get('/api/status', async (req, res) => {
