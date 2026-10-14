@@ -117,7 +117,7 @@ function getConfig() {
   };
 }
 
-// Scopes required for Google Fit
+// Scopes required for Google Fit & User Profile
 const SCOPES = [
   'https://www.googleapis.com/auth/fitness.activity.write',
   'https://www.googleapis.com/auth/fitness.activity.read',
@@ -126,8 +126,26 @@ const SCOPES = [
   'https://www.googleapis.com/auth/fitness.body.write',
   'https://www.googleapis.com/auth/fitness.body.read',
   'https://www.googleapis.com/auth/userinfo.profile',
-  'https://www.googleapis.com/auth/userinfo.email'
+  'https://www.googleapis.com/auth/userinfo.email',
+  'openid'
 ];
+
+// Helper to decode OpenID Connect id_token without extra network requests
+function decodeIdToken(idToken) {
+  try {
+    if (!idToken || typeof idToken !== 'string') return null;
+    const parts = idToken.split('.');
+    if (parts.length < 2) return null;
+    const payload = JSON.parse(Buffer.from(parts[1], 'base64').toString('utf8'));
+    return {
+      name: payload.name || payload.given_name || payload.email?.split('@')[0] || 'User',
+      email: payload.email || '',
+      picture: payload.picture || ''
+    };
+  } catch {
+    return null;
+  }
+}
 
 // Helper to get OAuth2 client for a specific user request
 function getOAuthClient(req = null) {
@@ -238,27 +256,37 @@ app.get('/api/status', async (req, res) => {
     localIp,
     localUrl: `http://${localIp}:${PORT}`,
     isConnected: false,
-    user: null
+    user: req.session?.user || null
   };
 
   if (!status.hasCredentials || !req.session || !req.session.tokens) {
     return res.json(status);
   }
 
-  try {
-    const oauth2Client = getOAuthClient(req);
-    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
-    const userInfo = await oauth2.userinfo.get();
-    status.isConnected = true;
-    status.user = {
-      name: userInfo.data.name,
-      email: userInfo.data.email,
-      picture: userInfo.data.picture
-    };
-  } catch (error) {
-    // If token expired and refresh failed, clear session
-    req.session.tokens = null;
-    status.isConnected = false;
+  status.isConnected = true;
+
+  // If user profile is not cached in session, attempt to fetch it once safely
+  if (!status.user) {
+    try {
+      const oauth2Client = getOAuthClient(req);
+      const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+      const userInfo = await oauth2.userinfo.get();
+      status.user = {
+        name: userInfo.data.name || userInfo.data.email?.split('@')[0] || 'User',
+        email: userInfo.data.email || '',
+        picture: userInfo.data.picture || ''
+      };
+      req.session.user = status.user;
+    } catch (error) {
+      console.warn('[Status] UserInfo API call warning:', error.message);
+      // Fallback profile so user remains connected even if Google OAuth2 API is disabled in GCP
+      status.user = {
+        name: 'Google Fit User',
+        email: '',
+        picture: ''
+      };
+      req.session.user = status.user;
+    }
   }
 
   res.json(status);
@@ -308,8 +336,19 @@ app.get('/auth/callback', async (req, res) => {
     const oauth2Client = getOAuthClient(req);
     const { tokens } = await oauth2Client.getToken(String(code));
     
-    // Store tokens strictly in user's encrypted session cookie
-    req.session.tokens = tokens;
+    // Store only lean tokens to prevent exceeding browser 4KB cookie limit
+    req.session.tokens = {
+      access_token: tokens.access_token,
+      refresh_token: tokens.refresh_token,
+      expiry_date: tokens.expiry_date
+    };
+
+    // Decode user profile directly from id_token (no extra network roundtrip)
+    const profile = decodeIdToken(tokens.id_token);
+    if (profile) {
+      req.session.user = profile;
+    }
+
     res.redirect('/?connected=1');
   } catch (err) {
     console.error('OAuth token exchange error:', err.message);
@@ -352,6 +391,7 @@ app.get('/api/today-steps', async (req, res) => {
           userId: 'me',
           requestBody: {
             aggregateBy: [aggregateByItem],
+            bucketByTime: { durationMillis: 86400000 },
             startTimeMillis: startOfDay,
             endTimeMillis: Math.max(endOfDay, startOfDay + 1000)
           }
@@ -363,74 +403,63 @@ app.get('/api/today-steps', async (req, res) => {
       }
     };
 
-    // 1. Try estimated steps first (matches Google Fit app)
-    let stepsData = await fetchAggregateMetric({
-      dataTypeName: 'com.google.step_count.delta',
-      dataSourceId: 'derived:com.google.step_count.delta:com.google.android.gms:estimated_steps'
-    });
-
-    // Fallback: merge_step_deltas
-    if (!stepsData || !stepsData.bucket?.length) {
-      stepsData = await fetchAggregateMetric({
-        dataTypeName: 'com.google.step_count.delta',
-        dataSourceId: 'derived:com.google.step_count.delta:com.google.android.gms:merge_step_deltas'
-      });
-    }
-
-    // Fallback: generic step_count.delta
-    if (!stepsData || !stepsData.bucket?.length) {
-      stepsData = await fetchAggregateMetric({
-        dataTypeName: 'com.google.step_count.delta'
-      });
-    }
-
-    if (stepsData?.bucket) {
-      for (const bucket of stepsData.bucket) {
+    // Helper to safely extract total sum from Google Fit aggregate buckets
+    const extractMetricSum = (data, metricKey = 'intVal') => {
+      let sum = 0;
+      if (!data?.bucket) return sum;
+      for (const bucket of data.bucket) {
         for (const dataset of bucket.dataset || []) {
           for (const point of dataset.point || []) {
             for (const val of point.value || []) {
-              if (typeof val.intVal === 'number') {
-                totalSteps += val.intVal;
-              } else if (typeof val.fpVal === 'number') {
-                totalSteps += Math.round(val.fpVal);
+              if (metricKey === 'intVal') {
+                if (typeof val.intVal === 'number') sum += val.intVal;
+                else if (typeof val.fpVal === 'number') sum += Math.round(val.fpVal);
+              } else if (metricKey === 'fpVal') {
+                if (typeof val.fpVal === 'number') sum += val.fpVal;
+                else if (typeof val.intVal === 'number') sum += val.intVal;
               }
             }
           }
         }
       }
+      return sum;
+    };
+
+    // 1. Fetch generic step count (covers all step providers, phones, wearables, and StepHack sensors)
+    let stepsData = await fetchAggregateMetric({
+      dataTypeName: 'com.google.step_count.delta'
+    });
+    totalSteps = extractMetricSum(stepsData, 'intVal');
+
+    // If generic count returned 0, check Google Fit app's estimated_steps stream
+    if (totalSteps === 0) {
+      const estimatedData = await fetchAggregateMetric({
+        dataTypeName: 'com.google.step_count.delta',
+        dataSourceId: 'derived:com.google.step_count.delta:com.google.android.gms:estimated_steps'
+      });
+      totalSteps = Math.max(totalSteps, extractMetricSum(estimatedData, 'intVal'));
     }
 
-    // 2. Fetch Distance safely (optional)
+    // If still 0, check merged step deltas stream
+    if (totalSteps === 0) {
+      const mergedData = await fetchAggregateMetric({
+        dataTypeName: 'com.google.step_count.delta',
+        dataSourceId: 'derived:com.google.step_count.delta:com.google.android.gms:merge_step_deltas'
+      });
+      totalSteps = Math.max(totalSteps, extractMetricSum(mergedData, 'intVal'));
+    }
+
+    // 2. Fetch Distance
     const distData = await fetchAggregateMetric({
       dataTypeName: 'com.google.distance.delta'
     });
-    if (distData?.bucket) {
-      for (const bucket of distData.bucket) {
-        for (const dataset of bucket.dataset || []) {
-          for (const point of dataset.point || []) {
-            for (const val of point.value || []) {
-              if (typeof val.fpVal === 'number') totalDistanceMeters += val.fpVal;
-            }
-          }
-        }
-      }
-    }
+    totalDistanceMeters = extractMetricSum(distData, 'fpVal');
 
-    // 3. Fetch Calories safely (optional)
+    // 3. Fetch Calories
     const calData = await fetchAggregateMetric({
       dataTypeName: 'com.google.calories.expended'
     });
-    if (calData?.bucket) {
-      for (const bucket of calData.bucket) {
-        for (const dataset of bucket.dataset || []) {
-          for (const point of dataset.point || []) {
-            for (const val of point.value || []) {
-              if (typeof val.fpVal === 'number') totalCalories += val.fpVal;
-            }
-          }
-        }
-      }
-    }
+    totalCalories = extractMetricSum(calData, 'fpVal');
 
     // Also include steps logged in current user session today if Google cloud hasn't aggregated yet
     const sessionHistory = req.session?.history || [];
@@ -772,7 +801,7 @@ app.post('/api/sync', async (req, res) => {
       device: `${walkData.meta.device.manufacturer} ${walkData.meta.device.model}`
     };
     req.session.history.unshift(logEntry);
-    req.session.history = req.session.history.slice(0, 20);
+    req.session.history = req.session.history.slice(0, 5);
 
     res.json({
       success: true,

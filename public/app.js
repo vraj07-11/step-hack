@@ -640,14 +640,9 @@ async function loadTodaySteps() {
       if (timeEl && data.lastUpdated) timeEl.textContent = data.lastUpdated;
       if (profToday) profToday.textContent = formatNum(data.todaySteps);
 
-      // Only display the real-time card if positive steps were fetched
-      // If 0 steps or not available, keep the real-time card removed from view so it doesn't clutter with 0s
+      // Display the real-time card when connected
       if (todayCard) {
-        if (data.todaySteps > 0) {
-          todayCard.classList.remove('hidden');
-        } else {
-          todayCard.classList.add('hidden');
-        }
+        todayCard.classList.remove('hidden');
       }
     } else {
       if (todayCard) todayCard.classList.add('hidden');
