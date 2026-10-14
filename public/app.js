@@ -311,7 +311,7 @@ function bindEvents() {
   }
 
   if (btnSync) btnSync.addEventListener('click', handleSyncSteps);
-  if (btnRefreshFit) btnRefreshFit.addEventListener('click', () => { loadTodaySteps(); loadStatus(); });
+  if (btnRefreshFit) btnRefreshFit.addEventListener('click', () => { loadTodaySteps(true); loadStatus(); });
   if (btnConnectGoogle) btnConnectGoogle.addEventListener('click', handleConnectGoogle);
   if (btnDisconnect) btnDisconnect.addEventListener('click', handleDisconnect);
   if (btnRefreshHistory) btnRefreshHistory.addEventListener('click', loadHistory);
@@ -615,19 +615,22 @@ async function loadStatus() {
   }
 }
 
-async function loadTodaySteps() {
+async function loadTodaySteps(isManual = false) {
   if (!state.isConnected) return;
   const todayCard = document.getElementById('today-counter-card');
+  const btnRefreshFit = document.getElementById('btn-refresh-fit');
   const stepValEl = document.getElementById('today-steps-val');
   const distValEl = document.getElementById('today-dist-val');
   const calValEl = document.getElementById('today-cal-val');
   const timeEl = document.getElementById('today-sync-time');
   const profToday = document.getElementById('prof-today-steps');
 
+  if (btnRefreshFit) btnRefreshFit.classList.add('spinning');
+
   try {
     const now = new Date();
     const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const endOfDay = now.getTime();
+    const endOfDay = startOfDay + 86400000 - 1;
 
     const res = await fetch(`/api/today-steps?startMs=${startOfDay}&endMs=${endOfDay}`);
     if (res.ok) {
@@ -644,11 +647,19 @@ async function loadTodaySteps() {
       if (todayCard) {
         todayCard.classList.remove('hidden');
       }
+
+      if (isManual) {
+        showToast(`Google Fit synced: ${formatNum(data.todaySteps)} steps today.`);
+      }
     } else {
-      if (todayCard) todayCard.classList.add('hidden');
+      if (isManual) showToast('Could not reach Google Fit API.', 'error');
     }
   } catch (err) {
-    if (todayCard) todayCard.classList.add('hidden');
+    if (isManual) showToast('Failed to refresh steps.', 'error');
+  } finally {
+    if (btnRefreshFit) {
+      setTimeout(() => btnRefreshFit.classList.remove('spinning'), 350);
+    }
   }
 }
 

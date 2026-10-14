@@ -56,9 +56,15 @@ app.use(compression());
 
 app.use(express.json({ limit: '50kb' }));
 app.use(express.static(path.join(__dirname, 'public'), {
-  maxAge: isProd ? '1d' : '1h',
   etag: true,
-  lastModified: true
+  lastModified: true,
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.html')) {
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+    } else if (filePath.endsWith('.css') || filePath.endsWith('.js')) {
+      res.setHeader('Cache-Control', 'public, max-age=3600, must-revalidate');
+    }
+  }
 }));
 
 // 3. Rate Limiters
@@ -393,7 +399,7 @@ app.get('/api/today-steps', async (req, res) => {
             aggregateBy: [aggregateByItem],
             bucketByTime: { durationMillis: 86400000 },
             startTimeMillis: startOfDay,
-            endTimeMillis: Math.max(endOfDay, startOfDay + 1000)
+            endTimeMillis: startOfDay + 86400000
           }
         });
         return result.data;

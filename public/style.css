@@ -280,6 +280,16 @@ body {
   border-color: var(--border-strong);
 }
 
+@keyframes spin-refresh {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.btn-icon-subtle.spinning svg {
+  animation: spin-refresh 0.75s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  color: #60a5fa;
+}
+
 /* Panel */
 .panel {
   background: var(--surface);
@@ -497,22 +507,29 @@ body {
   margin-top: 6px;
 }
 
+button.scale-point,
 .scale-point {
+  all: unset;
+  box-sizing: border-box;
   position: absolute;
   top: 0;
   transform: translateX(-50%);
-  background: none;
-  border: none;
-  padding: 2px 4px;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  outline: none !important;
+  box-shadow: none !important;
+  padding: 2px 6px;
   font-family: inherit;
-  font-size: 0.7rem;
+  font-size: 0.72rem;
   font-weight: 500;
-  color: var(--text-muted);
+  color: #94a3b8 !important;
   cursor: pointer;
   border-radius: var(--radius-sm);
-  transition: color 0.15s ease, background-color 0.15s ease, transform 0.1s ease;
+  transition: color 0.15s ease, background-color 0.15s ease, border-color 0.15s ease;
   user-select: none;
-  line-height: 1;
+  line-height: 1.2;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .scale-point[data-mins="15"] {
@@ -539,13 +556,18 @@ body {
   left: calc(100% - 9px);
 }
 
+button.scale-point:hover,
 .scale-point:hover {
-  color: var(--text-primary);
-  background: rgba(255, 255, 255, 0.08);
+  color: #f1f5f9 !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  border-color: rgba(255, 255, 255, 0.12) !important;
 }
 
+button.scale-point.active,
 .scale-point.active {
-  color: #60a5fa;
+  color: #60a5fa !important;
+  background: rgba(59, 130, 246, 0.15) !important;
+  border-color: rgba(59, 130, 246, 0.35) !important;
   font-weight: 700;
 }
 
