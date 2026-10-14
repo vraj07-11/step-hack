@@ -333,41 +333,66 @@ app.get('/api/today-steps', async (req, res) => {
 
     const fitness = google.fitness({ version: 'v1', auth: oauth2Client });
     
-    const now = new Date();
-    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const endOfDay = now.getTime();
+    // Support client-passed local start/end times if provided, else fallback to server local day
+    const clientStart = parseInt(req.query.startMs, 10);
+    const clientEnd = parseInt(req.query.endMs, 10);
 
-    const aggregateRes = await fitness.users.dataset.aggregate({
-      userId: 'me',
-      requestBody: {
-        aggregateBy: [
-          { dataTypeName: 'com.google.step_count.delta' },
-          { dataTypeName: 'com.google.distance.delta' },
-          { dataTypeName: 'com.google.calories.expended' }
-        ],
-        bucketByTime: { durationMillis: 86400000 },
-        startTimeMillis: startOfDay,
-        endTimeMillis: endOfDay
-      }
-    });
+    const now = new Date();
+    const startOfDay = !isNaN(clientStart) ? clientStart : new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const endOfDay = !isNaN(clientEnd) ? clientEnd : (startOfDay + 86400000 - 1);
 
     let totalSteps = 0;
     let totalDistanceMeters = 0;
     let totalCalories = 0;
 
-    const buckets = aggregateRes.data.bucket || [];
-    for (const bucket of buckets) {
-      for (const dataset of bucket.dataset || []) {
-        const streamId = dataset.dataSourceId || '';
-        for (const point of dataset.point || []) {
-          for (const val of point.value || []) {
-            if (val.intVal) {
-              totalSteps += val.intVal;
-            } else if (typeof val.fpVal === 'number') {
-              if (streamId.includes('distance')) {
-                totalDistanceMeters += val.fpVal;
-              } else if (streamId.includes('calories')) {
-                totalCalories += val.fpVal;
+    // Helper to query aggregate safely with metric isolation so missing permissions don't break step count
+    const fetchAggregateMetric = async (aggregateByItem) => {
+      try {
+        const result = await fitness.users.dataset.aggregate({
+          userId: 'me',
+          requestBody: {
+            aggregateBy: [aggregateByItem],
+            startTimeMillis: startOfDay,
+            endTimeMillis: Math.max(endOfDay, startOfDay + 1000)
+          }
+        });
+        return result.data;
+      } catch (err) {
+        console.warn(`[Fit API] Aggregate failed for ${aggregateByItem.dataTypeName || aggregateByItem.dataSourceId}:`, err.message);
+        return null;
+      }
+    };
+
+    // 1. Try estimated steps first (matches Google Fit app)
+    let stepsData = await fetchAggregateMetric({
+      dataTypeName: 'com.google.step_count.delta',
+      dataSourceId: 'derived:com.google.step_count.delta:com.google.android.gms:estimated_steps'
+    });
+
+    // Fallback: merge_step_deltas
+    if (!stepsData || !stepsData.bucket?.length) {
+      stepsData = await fetchAggregateMetric({
+        dataTypeName: 'com.google.step_count.delta',
+        dataSourceId: 'derived:com.google.step_count.delta:com.google.android.gms:merge_step_deltas'
+      });
+    }
+
+    // Fallback: generic step_count.delta
+    if (!stepsData || !stepsData.bucket?.length) {
+      stepsData = await fetchAggregateMetric({
+        dataTypeName: 'com.google.step_count.delta'
+      });
+    }
+
+    if (stepsData?.bucket) {
+      for (const bucket of stepsData.bucket) {
+        for (const dataset of bucket.dataset || []) {
+          for (const point of dataset.point || []) {
+            for (const val of point.value || []) {
+              if (typeof val.intVal === 'number') {
+                totalSteps += val.intVal;
+              } else if (typeof val.fpVal === 'number') {
+                totalSteps += Math.round(val.fpVal);
               }
             }
           }
@@ -375,7 +400,49 @@ app.get('/api/today-steps', async (req, res) => {
       }
     }
 
-    // If distance or calories weren't registered by external trackers, calculate standard equivalents
+    // 2. Fetch Distance safely (optional)
+    const distData = await fetchAggregateMetric({
+      dataTypeName: 'com.google.distance.delta'
+    });
+    if (distData?.bucket) {
+      for (const bucket of distData.bucket) {
+        for (const dataset of bucket.dataset || []) {
+          for (const point of dataset.point || []) {
+            for (const val of point.value || []) {
+              if (typeof val.fpVal === 'number') totalDistanceMeters += val.fpVal;
+            }
+          }
+        }
+      }
+    }
+
+    // 3. Fetch Calories safely (optional)
+    const calData = await fetchAggregateMetric({
+      dataTypeName: 'com.google.calories.expended'
+    });
+    if (calData?.bucket) {
+      for (const bucket of calData.bucket) {
+        for (const dataset of bucket.dataset || []) {
+          for (const point of dataset.point || []) {
+            for (const val of point.value || []) {
+              if (typeof val.fpVal === 'number') totalCalories += val.fpVal;
+            }
+          }
+        }
+      }
+    }
+
+    // Also include steps logged in current user session today if Google cloud hasn't aggregated yet
+    const sessionHistory = req.session?.history || [];
+    const sessionStepsToday = sessionHistory.reduce((acc, item) => {
+      const itemTime = new Date(item.timestamp).getTime();
+      return (itemTime >= startOfDay && itemTime <= endOfDay) ? acc + (item.steps || 0) : acc;
+    }, 0);
+
+    if (sessionStepsToday > totalSteps) {
+      totalSteps = sessionStepsToday;
+    }
+
     const totalDistanceKm = totalDistanceMeters > 0
       ? parseFloat((totalDistanceMeters / 1000).toFixed(2))
       : parseFloat((totalSteps * 0.74 / 1000).toFixed(2));
@@ -391,6 +458,7 @@ app.get('/api/today-steps', async (req, res) => {
       lastUpdated: now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
     });
   } catch (err) {
+    console.error('Failed to fetch today steps:', err.message);
     res.status(500).json({ error: 'Failed to fetch today steps' });
   }
 });

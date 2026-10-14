@@ -40,6 +40,81 @@ document.addEventListener('DOMContentLoaded', () => {
   updatePreviewInstant();
 });
 
+const DURATION_MILESTONES = [
+  { mins: 15, pct: 0 },
+  { mins: 30, pct: 20 },
+  { mins: 45, pct: 40 },
+  { mins: 60, pct: 60 },
+  { mins: 90, pct: 80 },
+  { mins: 120, pct: 100 }
+];
+
+function minutesToSliderPct(mins) {
+  const m = Math.max(15, Math.min(120, mins));
+  for (let i = 0; i < DURATION_MILESTONES.length - 1; i++) {
+    const curr = DURATION_MILESTONES[i];
+    const next = DURATION_MILESTONES[i + 1];
+    if (m >= curr.mins && m <= next.mins) {
+      const ratio = (m - curr.mins) / (next.mins - curr.mins);
+      return curr.pct + ratio * (next.pct - curr.pct);
+    }
+  }
+  return m <= 15 ? 0 : 100;
+}
+
+function sliderPctToMinutes(pct) {
+  const p = Math.max(0, Math.min(100, pct));
+  for (let i = 0; i < DURATION_MILESTONES.length - 1; i++) {
+    const curr = DURATION_MILESTONES[i];
+    const next = DURATION_MILESTONES[i + 1];
+    if (p >= curr.pct && p <= next.pct) {
+      const ratio = (p - curr.pct) / (next.pct - curr.pct);
+      const exactMins = curr.mins + ratio * (next.mins - curr.mins);
+      return Math.round(exactMins / 5) * 5;
+    }
+  }
+  return 45;
+}
+
+function updateSliderProgress(pct) {
+  const durationSlider = document.getElementById('input-duration-range');
+  if (!durationSlider) return;
+  const clampedPct = Math.max(0, Math.min(100, pct));
+  durationSlider.style.setProperty('--slider-pct', `${clampedPct}%`);
+  durationSlider.style.background = `linear-gradient(to right, var(--primary) 0%, var(--primary) ${clampedPct}%, rgba(255, 255, 255, 0.1) ${clampedPct}%, rgba(255, 255, 255, 0.1) 100%)`;
+}
+
+function updateScaleActiveButtons(mins) {
+  document.querySelectorAll('.scale-point').forEach(btn => {
+    const bMins = parseInt(btn.dataset.mins, 10);
+    if (bMins === mins) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+}
+
+function setDuration(mins, updateSliderPos = true) {
+  state.durationMinutes = Math.max(15, Math.min(120, mins));
+  const textEl = document.getElementById('duration-val-text');
+  if (textEl) textEl.textContent = state.durationMinutes;
+
+  const slider = document.getElementById('input-duration-range');
+  const pct = minutesToSliderPct(state.durationMinutes);
+  if (slider) {
+    if (updateSliderPos) {
+      slider.value = pct;
+    }
+    slider.setAttribute('aria-valuenow', state.durationMinutes);
+    slider.setAttribute('aria-valuetext', `${state.durationMinutes} minutes`);
+  }
+  updateSliderProgress(pct);
+  updateScaleActiveButtons(state.durationMinutes);
+  updateTimesFromDuration();
+  updatePreviewInstant();
+}
+
 function initDefaults() {
   const now = new Date();
   const past = new Date(now.getTime() - state.durationMinutes * 60000);
@@ -54,6 +129,8 @@ function initDefaults() {
   const endInput = document.getElementById('input-end-time');
   if (startInput) startInput.value = formatInput(past);
   if (endInput) endInput.value = formatInput(now);
+
+  setDuration(state.durationMinutes);
 }
 
 function bindEvents() {
@@ -112,25 +189,40 @@ function bindEvents() {
   if (durationSlider) {
     // Instant 60fps input event while sliding
     durationSlider.addEventListener('input', () => {
-      state.durationMinutes = parseInt(durationSlider.value, 10);
+      const rawPct = parseFloat(durationSlider.value);
+      const mins = sliderPctToMinutes(rawPct);
+      state.durationMinutes = mins;
       const textEl = document.getElementById('duration-val-text');
-      if (textEl) textEl.textContent = state.durationMinutes;
+      if (textEl) textEl.textContent = mins;
+      durationSlider.setAttribute('aria-valuenow', mins);
+      durationSlider.setAttribute('aria-valuetext', `${mins} minutes`);
+      updateSliderProgress(rawPct);
+      updateScaleActiveButtons(mins);
       updateTimesFromDuration();
       updatePreviewInstant();
+    });
+
+    durationSlider.addEventListener('change', () => {
+      // Snap neatly to the mapped milestone position on release
+      setDuration(state.durationMinutes);
     });
   }
 
   if (btnAutoDuration) {
     btnAutoDuration.addEventListener('click', () => {
-      const idealMinutes = Math.max(5, Math.min(180, Math.round(state.totalSteps / 110)));
-      state.durationMinutes = idealMinutes;
-      if (durationSlider) durationSlider.value = idealMinutes;
-      const textEl = document.getElementById('duration-val-text');
-      if (textEl) textEl.textContent = idealMinutes;
-      updateTimesFromDuration();
-      updatePreviewInstant();
+      const idealMinutes = Math.max(15, Math.min(120, Math.round(state.totalSteps / 110 / 5) * 5 || 45));
+      setDuration(idealMinutes);
     });
   }
+
+  document.querySelectorAll('.scale-point').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const mins = parseInt(btn.dataset.mins, 10);
+      if (!isNaN(mins)) {
+        setDuration(mins);
+      }
+    });
+  });
 
   if (tabDuration && tabRange) {
     tabDuration.addEventListener('click', () => {
@@ -139,8 +231,7 @@ function bindEvents() {
       tabRange.classList.remove('active');
       document.getElementById('view-mode-duration')?.classList.remove('hidden');
       document.getElementById('view-mode-range')?.classList.add('hidden');
-      updateTimesFromDuration();
-      updatePreviewInstant();
+      setDuration(state.durationMinutes);
     });
 
     tabRange.addEventListener('click', () => {
@@ -149,6 +240,7 @@ function bindEvents() {
       tabDuration.classList.remove('active');
       document.getElementById('view-mode-range')?.classList.remove('hidden');
       document.getElementById('view-mode-duration')?.classList.add('hidden');
+      syncInputsFromDuration();
       updateTimesFromInputs();
       updatePreviewInstant();
     });
@@ -208,6 +300,7 @@ function bindEvents() {
     btnClearHistory.addEventListener('click', async () => {
       if (!confirm('Clear recent session history?')) return;
       try {
+        localStorage.removeItem(LOCAL_STORAGE_HISTORY_KEY);
         await fetch('/api/history/clear', { method: 'POST' });
         showToast('History cleared.');
         loadHistory();
@@ -249,11 +342,24 @@ function bindEvents() {
   });
 }
 
+function syncInputsFromDuration() {
+  const now = new Date();
+  const past = new Date(now.getTime() - state.durationMinutes * 60000);
+  const pad = (n) => String(n).padStart(2, '0');
+  const formatInput = (d) => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+
+  const startInput = document.getElementById('input-start-time');
+  const endInput = document.getElementById('input-end-time');
+  if (startInput) startInput.value = formatInput(past);
+  if (endInput) endInput.value = formatInput(now);
+}
+
 function updateTimesFromDuration() {
   const now = new Date();
   const start = new Date(now.getTime() - state.durationMinutes * 60000);
   state.endTime = now.toISOString();
   state.startTime = start.toISOString();
+  syncInputsFromDuration();
 }
 
 function updateTimesFromInputs() {
@@ -433,6 +539,11 @@ async function handleSyncSteps() {
   if (btnSync) btnSync.classList.add('loading');
   if (btnText) btnText.textContent = 'Syncing...';
 
+  // In Recent mode, refresh end time to exact current moment right before sync
+  if (state.timeMode === 'duration') {
+    updateTimesFromDuration();
+  }
+
   try {
     const res = await fetch('/api/sync', {
       method: 'POST',
@@ -450,6 +561,9 @@ async function handleSyncSteps() {
     if (!res.ok) throw new Error(data.error || 'Failed to sync steps');
 
     showToast(`Logged ${formatNum(state.totalSteps)} steps to Google Fit.`, 'success');
+    if (data.summary) {
+      saveLocalHistory(data.summary);
+    }
     loadTodaySteps();
     loadHistory();
   } catch (err) {
@@ -475,7 +589,6 @@ async function loadStatus() {
       if (unlinkedEl) unlinkedEl.classList.add('hidden');
       if (profileBtn) profileBtn.classList.remove('hidden');
       if (connectBanner) connectBanner.classList.add('hidden');
-      if (todayCard) todayCard.classList.remove('hidden');
 
       const avatar = document.getElementById('user-avatar');
       const name = document.getElementById('user-name');
@@ -504,6 +617,7 @@ async function loadStatus() {
 
 async function loadTodaySteps() {
   if (!state.isConnected) return;
+  const todayCard = document.getElementById('today-counter-card');
   const stepValEl = document.getElementById('today-steps-val');
   const distValEl = document.getElementById('today-dist-val');
   const calValEl = document.getElementById('today-cal-val');
@@ -511,18 +625,35 @@ async function loadTodaySteps() {
   const profToday = document.getElementById('prof-today-steps');
 
   try {
-    const res = await fetch('/api/today-steps');
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const endOfDay = now.getTime();
+
+    const res = await fetch(`/api/today-steps?startMs=${startOfDay}&endMs=${endOfDay}`);
     if (res.ok) {
       const data = await res.json();
+      state.todaySteps = data.todaySteps || 0;
+
       if (stepValEl) stepValEl.textContent = formatNum(data.todaySteps);
       if (distValEl) distValEl.textContent = `${data.todayDistanceKm} km`;
       if (calValEl) calValEl.textContent = `${formatNum(data.todayCaloriesKcal)} kcal`;
       if (timeEl && data.lastUpdated) timeEl.textContent = data.lastUpdated;
       if (profToday) profToday.textContent = formatNum(data.todaySteps);
-      state.todaySteps = data.todaySteps;
+
+      // Only display the real-time card if positive steps were fetched
+      // If 0 steps or not available, keep the real-time card removed from view so it doesn't clutter with 0s
+      if (todayCard) {
+        if (data.todaySteps > 0) {
+          todayCard.classList.remove('hidden');
+        } else {
+          todayCard.classList.add('hidden');
+        }
+      }
+    } else {
+      if (todayCard) todayCard.classList.add('hidden');
     }
   } catch (err) {
-    if (stepValEl) stepValEl.textContent = '0';
+    if (todayCard) todayCard.classList.add('hidden');
   }
 }
 
@@ -550,35 +681,70 @@ async function handleDisconnect() {
   }
 }
 
+const LOCAL_STORAGE_HISTORY_KEY = 'stephack_recent_history';
+
+function getLocalHistory() {
+  try {
+    const raw = localStorage.getItem(LOCAL_STORAGE_HISTORY_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveLocalHistory(entry) {
+  try {
+    const current = getLocalHistory();
+    const updated = [entry, ...current.filter(item => item.id !== entry.id)].slice(0, 20);
+    localStorage.setItem(LOCAL_STORAGE_HISTORY_KEY, JSON.stringify(updated));
+    return updated;
+  } catch {
+    return [];
+  }
+}
+
 async function loadHistory() {
   const listEl = document.getElementById('history-list');
+  const profCount = document.getElementById('prof-sessions-count');
   if (!listEl) return;
+
+  let historyList = getLocalHistory();
 
   try {
     const res = await fetch('/api/history');
-    const data = await res.json();
-    const profCount = document.getElementById('prof-sessions-count');
-    if (profCount) profCount.textContent = history.length;
-
-    if (history.length === 0) {
-      listEl.innerHTML = '<div class="empty-state">No sessions logged in this session yet.</div>';
-      return;
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data.history) && data.history.length > 0) {
+        const serverIds = new Set(data.history.map(h => h.id));
+        const combined = [...data.history, ...historyList.filter(h => !serverIds.has(h.id))].slice(0, 20);
+        historyList = combined;
+        try {
+          localStorage.setItem(LOCAL_STORAGE_HISTORY_KEY, JSON.stringify(combined));
+        } catch {}
+      }
     }
-
-    listEl.innerHTML = history.map(item => `
-      <div class="history-item">
-        <div class="hist-left">
-          <span class="hist-steps">+${formatNum(item.steps)} steps</span>
-          <span class="hist-meta">${item.distanceKm} km &bull; ${item.durationMinutes}m &bull; ${item.caloriesKcal} kcal</span>
-        </div>
-        <div class="hist-time">
-          ${new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-        </div>
-      </div>
-    `).join('');
   } catch (err) {
-    console.error('History load failed:', err);
+    console.warn('History fetch warning, using local history cache:', err);
   }
+
+  if (profCount) profCount.textContent = historyList.length;
+
+  if (historyList.length === 0) {
+    listEl.innerHTML = '<div class="empty-state">No sessions logged in this session yet.</div>';
+    return;
+  }
+
+  listEl.innerHTML = historyList.map(item => `
+    <div class="history-item">
+      <div class="hist-left">
+        <span class="hist-steps">+${formatNum(item.steps)} steps</span>
+        <span class="hist-meta">${item.distanceKm || '0'} km &bull; ${item.durationMinutes || '0'}m &bull; ${formatNum(item.caloriesKcal || 0)} kcal</span>
+      </div>
+      <div class="hist-time">
+        ${new Date(item.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+      </div>
+    </div>
+  `).join('');
 }
 
 function checkUrlParams() {
